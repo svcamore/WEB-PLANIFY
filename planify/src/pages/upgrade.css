@@ -1,0 +1,43 @@
+
+.content-area {
+  background-color: white;
+  border-radius: 10px;
+  padding: 30px;
+  min-height: 500px;
+}
+
+.plan-card {
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  background-color: #fff;
+  transition: all 0.3s ease;
+}
+
+.plan-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.check-icon {
+  color: green;
+  margin-right: 5px;
+}
+
+.btn-upgrade {
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  padding: 10px 30px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.back-link {
+  color: #333;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}

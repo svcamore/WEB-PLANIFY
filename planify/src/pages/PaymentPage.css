@@ -1,0 +1,135 @@
+.payment-container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 2rem;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logo-top {
+  position: absolute;
+  top: 16px;
+  left: 70px;
+}
+
+.payment-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.left-panel {
+  flex: 1;
+  min-width: 300px;
+  padding: 0;
+  background: #f9f9f9;
+  border-radius: 12px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.05);
+}
+.right-panel{
+  flex: 1;
+  min-width: 300px;
+  padding: 1.5rem;
+  background: #d1e6fd;
+  border-radius: 12px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.05);
+}
+
+.plan-info ul {
+  list-style: none;
+  padding: 0;
+}
+
+.plan-info ul li {
+  margin: 0.5rem 0;
+}
+
+.contact-info input {
+  width: 100%;
+  padding: 0.7rem;
+  margin: 0.5rem 0;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.payment-info{
+  margin-bottom: 200px;
+}
+
+.payment-confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.confirm-btn {
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.confirm-btn {
+  background-color: #2563eb;
+  color: white;
+  width: 120px;
+}
+
+.btn {
+  color: blue;
+}
+.features-list .check {
+  color: green;
+  margin-right: 8px;
+  font-weight: bold;
+}
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  width: 500px;
+}
+
+.close {
+  position: absolute; /* Change to absolute positioning */
+  top: 0px; /* Adjust vertical position */
+  right: 10px; /* Adjust horizontal position */
+  cursor: pointer;
+  font-size: 30px;
+}
+
+.btn-enjoy {
+  background-color: #007BFF; /* Original background color */
+  color: white;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s; /* Smooth transition */
+}
+
+.btn-enjoy:hover {
+  background-color: #0056b3; /* Darker shade on hover */
+}
+
+
+

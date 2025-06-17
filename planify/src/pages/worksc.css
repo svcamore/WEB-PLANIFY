@@ -1,0 +1,278 @@
+/* Main Content Styles */
+.content {
+  background-color: #f8f9fa;
+}
+
+/* Welcome Section */
+.content .container-fluid {
+  padding: 2rem;
+  height: 100vh;
+}
+
+.welcome-greeting {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-radius: 16px;
+  padding: 2rem;
+  color: white;
+  margin-bottom: 2rem;
+}
+
+.welcome-greeting h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.welcome-greeting p {
+  opacity: 0.9;
+  font-size: 1rem;
+}
+
+.welcome-illustration img {
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Workspace Section */
+.workspace-section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+/* Navigation Tabs */
+.nav-tabs {
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 2rem;
+}
+
+.nav-tabs .nav-item {
+  margin-bottom: -2px;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0;
+  transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: transparent;
+  color: #4f46e5;
+  background: none;
+}
+
+.nav-tabs .nav-link.active {
+  color: #4f46e5;
+  background: none;
+  border-color: transparent transparent #4f46e5;
+  font-weight: 600;
+}
+
+.nav-tabs .nav-link i {
+  margin-right: 0.5rem;
+}
+.card-hover {
+      transition: box-shadow 0.3s ease, transform 0.2s ease;
+    }
+
+    .card-hover:hover {
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      transform: translateY(-4px);
+    }
+
+/* Add New Card */
+.add-new-card {
+  background: #ffffff;
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  min-height: 200px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.add-new-card:hover {
+  border-color: #4f46e5;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+  transform: translateY(-2px);
+}
+
+.add-new-card .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+.add-new-card .fas.fa-plus {
+  font-size: 3rem;
+  color: #4f46e5;
+  margin-bottom: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.add-new-card:hover .fas.fa-plus {
+  transform: scale(1.1);
+}
+
+.add-new-card .card-text {
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.add-new-card:hover .card-text {
+  color: #4f46e5;
+}
+
+
+.modal-section {
+  background-color: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.modal-input {
+  margin-bottom: 15px;
+  border-radius: 8px;
+  background-color: #fff3f3;
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+.picture-cover {
+  width: 100%;
+  height: 48px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff3f3;
+  color: #555;
+  cursor: pointer;
+}
+
+.picture-cover:hover {
+  background-color: #ffecec;
+}
+
+
+.modal-content {
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 30px;
+  width: 100px;
+  max-width: 90%;
+  margin: auto;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  font-family: 'Arial', sans-serif;
+}
+
+/* Judul modal */
+.modal-content h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+/* Form section (dalam box) */
+.modal-section {
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: #fafafa;
+}
+
+/* Label dan input */
+.modal-section label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.modal-section input[type="text"],
+.modal-section input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #fff3f3;
+  font-size: 14px;
+}
+
+/* Tombol bawah */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.modal-footer .btn{
+  width: 150px;
+}
+
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .content .container-fluid {
+    padding: 1rem;
+  }
+  
+  .welcome-greeting {
+    padding: 1.5rem;
+    text-align: center;
+  }
+  
+  .welcome-greeting h1 {
+    font-size: 1.5rem;
+  }
+  
+  .welcome-illustration {
+    margin-top: 1rem;
+  }
+  
+  .nav-tabs .nav-link {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .add-new-card {
+    min-height: 150px;
+  }
+  
+  .add-new-card .fas.fa-plus {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .welcome-greeting {
+    padding: 1rem;
+  }
+  
+  .welcome-greeting h1 {
+    font-size: 1.25rem;
+  }
+  
+  .workspace-section h2 {
+    font-size: 1.25rem;
+  }
+}
