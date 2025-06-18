@@ -1,5 +1,14 @@
-import React, { useEffect,useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  FaSignOutAlt,
+  FaFolder,
+  FaUser,
+  FaPaperPlane,
+  FaEllipsisV,
+  FaTimes,
+} from "react-icons/fa"; // Using react-icons for better icon management
+
 const Dashboard = () => {
   const API_URL = process.env.REACT_APP_API_URL;
   const [user, setUser] = useState(null);
@@ -7,18 +16,23 @@ const Dashboard = () => {
   const [payments, setPayments] = useState([]);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true); // State for loading indicator
+  const [error, setError] = useState(null); // State for error handling
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/";
   };
-  
+
   const fetchUser = async () => {
-    const token = localStorage.getItem("token"); // Ambil token dari localStorage
-    if (!token) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/");
+      return;
+    }
 
     try {
-      const res = await fetch(API_URL+"/auth/user", {
+      const res = await fetch(API_URL + "/auth/user", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -26,40 +40,50 @@ const Dashboard = () => {
       });
 
       if (!res.ok) {
-        throw new Error("Gagal fetch user");
+        throw new Error("Failed to fetch user data.");
       }
 
       const data = await res.json();
       setUser(data);
-      // Cek tier
       if (data.tier && data.tier.toLowerCase() !== "admin") {
         navigate("/");
       }
     } catch (err) {
-      console.error("Gagal ambil user:", err);
+      console.error("Error fetching user:", err);
+      setError("Failed to load user information.");
+      navigate("/"); // Redirect on user fetch error or unauthorized
     }
   };
+
   const fetchPayments = async () => {
     const token = localStorage.getItem("token");
+    if (!token) return;
+    setLoading(true); // Set loading to true before fetching
+    setError(null); // Clear previous errors
+
     try {
-      const res = await fetch(API_URL+"/payments/all", {
+      const res = await fetch(API_URL + "/payments/all", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!res.ok) throw new Error("Gagal mengambil data pembayaran");
+      if (!res.ok) {
+        throw new Error("Failed to retrieve payment data.");
+      }
 
       const json = await res.json();
-      setPayments(json.data); // ✅ ambil array-nya langsung dari `data`
+      setPayments(json.data);
     } catch (err) {
       console.error("Error fetching payments:", err);
+      setError("Failed to load payment history.");
+    } finally {
+      setLoading(false); // Set loading to false after fetching
     }
   };
 
   const confirmPayment = async (id) => {
-    console.log(id)
     const token = localStorage.getItem("token");
     try {
       const response = await fetch(`${API_URL}/payments/${id}`, {
@@ -72,12 +96,13 @@ const Dashboard = () => {
       });
 
       if (!response.ok) {
-        throw new Error("Gagal mengonfirmasi pembayaran");
+        throw new Error("Failed to confirm payment.");
       }
-      alert("Pembayaran Berhasil di Konfirmasi");
+      alert("Payment successfully confirmed!");
       fetchPayments();
     } catch (error) {
-      console.error("Error saat mengonfirmasi pembayaran:", error);
+      console.error("Error confirming payment:", error);
+      alert("Error confirming payment. Please try again.");
     }
   };
 
@@ -94,15 +119,16 @@ const Dashboard = () => {
       });
 
       if (!response.ok) {
-        throw new Error("Gagal menolak pembayaran");
+        throw new Error("Failed to reject payment.");
       }
-      alert("Pembayaran Berhasil ditolak")
+      alert("Payment successfully rejected!");
       fetchPayments();
-      // console.log(`Pembayaran ${id} berhasil ditolak.`);
     } catch (error) {
-      console.error("Error saat menolak pembayaran:", error);
+      console.error("Error rejecting payment:", error);
+      alert("Error rejecting payment. Please try again.");
     }
   };
+
   const fetchPaymentDetail = async (id) => {
     const token = localStorage.getItem("token");
     try {
@@ -111,295 +137,416 @@ const Dashboard = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!res.ok) throw new Error("Gagal ambil detail pembayaran");
+      if (!res.ok) throw new Error("Failed to fetch payment details.");
       const json = await res.json();
-      setSelectedPayment(json.data); // pastikan backend mengembalikan `data`
+      setSelectedPayment(json.data);
       setShowModal(true);
     } catch (error) {
-      console.error("Gagal fetch detail pembayaran:", error);
+      console.error("Error fetching payment details:", error);
+      alert("Failed to load payment details. Please try again.");
     }
   };
-
 
   useEffect(() => {
     document.body.style.margin = "0";
     document.body.style.fontFamily = "'Inter', sans-serif";
-    document.body.style.backgroundColor = "#e6eaf3";
-    document.body.style.color = "#000";
+    document.body.style.backgroundColor = "#f0f2f5"; // Lighter background
+    document.body.style.color = "#333"; // Darker text for better contrast
     fetchUser();
     fetchPayments();
   }, []);
 
+  // Inline styles for better organization and readability
   const styles = {
-    a: {
-      textDecoration: "none",
-    },
     header: {
-      backgroundColor: "#fef9f8",
+      backgroundColor: "#ffffff",
       display: "flex",
       alignItems: "center",
-      padding: "10px 20px",
-      gap: "8px",
+      padding: "15px 30px", // Increased padding
+      boxShadow: "0 2px 4px rgba(0,0,0,0.1)", // Subtle shadow
+      gap: "10px",
     },
     headerImg: {
-      width: "32px",
-      height: "32px",
+      width: "40px", // Larger logo
+      height: "40px",
     },
     logoText: {
-      fontWeight: 600,
-      fontSize: "20px",
-      color: "#000",
+      fontWeight: 700, // Bolder
+      fontSize: "24px", // Larger
+      color: "#333",
     },
     title: {
       flexGrow: 1,
-      fontWeight: 600,
-      fontSize: "20px",
+      fontWeight: 700,
+      fontSize: "24px",
       color: "#1a73e8",
       textAlign: "center",
     },
     signout: {
-      fontSize: "12px",
+      fontSize: "14px",
       color: "#7a7a9d",
       display: "flex",
       alignItems: "center",
-      gap: "4px",
+      gap: "8px",
       cursor: "pointer",
+      padding: "8px 12px",
+      borderRadius: "5px",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#f0f0f0",
+      },
     },
     signoutIcon: {
-      fontSize: "14px",
+      fontSize: "16px",
     },
     main: {
-      padding: "20px 16px 40px",
-      maxWidth: "900px",
-      margin: "0 auto",
+      padding: "30px 20px", // Increased padding
+      maxWidth: "1200px", // Wider content area
+      margin: "20px auto", // Centered with margin top
+      backgroundColor: "#ffffff", // White background for main content
+      borderRadius: "12px", // Rounded corners
+      boxShadow: "0 4px 8px rgba(0,0,0,0.1)", // More prominent shadow
+    },
+    welcomeSection: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: "20px", // Increased gap
+      marginBottom: "30px", // Increased margin
     },
     helloAdmin: {
       backgroundColor: "#1a4ed8",
       color: "#fff",
-      borderRadius: "8px",
-      padding: "12px 16px",
-      width: "200px",
-      height: "80px",
+      borderRadius: "10px", // More rounded
+      padding: "20px 25px", // Increased padding
+      width: "280px", // Wider
+      minHeight: "100px", // Taller
       fontWeight: 600,
-      fontSize: "20px",
-      lineHeight: 1.2,
-      marginBottom: "20px",
+      fontSize: "24px", // Larger text
+      lineHeight: 1.3,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
     },
     helloAdminSmall: {
       display: "block",
       fontWeight: 400,
-      fontSize: "10px",
-      marginTop: "4px",
+      fontSize: "12px",
+      marginTop: "8px", // More space
       color: "#d9e1ff",
     },
     navButtons: {
       backgroundColor: "#fef9f8",
-      borderRadius: "12px",
-      padding: "15px 16px",
+      borderRadius: "15px", // More rounded
+      padding: "15px 20px",
       display: "flex",
       alignItems: "center",
-      gap: "16px",
-      Width: "fit-content",
-      marginBottom: "24px",
+      gap: "20px", // Increased gap
+      width: "fit-content",
+      boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
     },
-    btnDashboard: {
+    navButtonContainer: {
       cursor: "pointer",
-      padding: "6px",
-    },
-    btnDashboardIcon: {
-      fontSize: "22px",
-    },
-    userContainer: {
       display: "flex",
       alignItems: "center",
-      background: "linear-gradient(90deg, #0038ff, #004bff)",
-      borderRadius: "20px",
-      padding: "10px 20px",
-      color: "white",
-      gap: "12px",
-      cursor: "pointer",
+      gap: "10px",
+      padding: "8px 15px",
+      borderRadius: "8px",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#e6eaf3",
+      },
+      backgroundColor: "transparent", // Default
     },
-    iconUser: {
-      color: "#0022ff",
-      fontSize: "22px",
-      backgroundColor: "transparent",
-      border: "none",
+    navButtonContainerActive: {
+      backgroundColor: "#e6eaf3", // Active state background
+      color: "#1a73e8",
     },
-    textContainer: {
-      display: "flex",
-      flexDirection: "column",
-      fontSize: "15px",
+    navButtonIcon: {
+      fontSize: "20px",
+      color: "#1a73e8", // Blue icons
+    },
+    navButtonText: {
+      fontSize: "16px",
       fontWeight: "500",
-    },
-    iconSend: {
-      fontSize: "22px",
-      color: "#0022ff",
-      cursor: "pointer",
-      backgroundColor: "transparent",
-      border: "none",
+      color: "#333",
     },
     statsContainer: {
-      display: "flex",
-      gap: "16px",
+      display: "grid", // Using grid for better layout
+      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", // Responsive columns
+      gap: "20px", // Increased gap
+      marginBottom: "40px", // More space below
       justifyContent: "center",
-      marginBottom: "32px",
-      flexWrap: "wrap",
     },
     statBox: {
       backgroundColor: "#fef9f8",
-      borderRadius: "8px",
-      width: "28%",
-      minWidth: "160px",
-      padding: "12px 0 16px",
+      borderRadius: "10px", // More rounded
+      padding: "15px", // Increased padding
       textAlign: "center",
+      boxShadow: "0 2px 5px rgba(0,0,0,0.08)",
+      border: "1px solid #e0e0e0", // Subtle border
     },
     statLabel: {
       backgroundColor: "#a7baff",
-      color: "#fef9f8",
-      fontSize: "12px",
+      color: "#fff",
+      fontSize: "14px", // Slightly larger
       fontWeight: 600,
-      padding: "6px 0",
-      borderRadius: "4px 4px 0 0",
+      padding: "8px 0",
+      borderRadius: "8px 8px 0 0", // More rounded corners
       userSelect: "none",
     },
     statValue: {
       backgroundColor: "#1a4ed8",
       color: "#fef9f8",
-      fontWeight: 600,
-      fontSize: "20px",
-      padding: "8px 0",
-      borderRadius: "0 0 4px 4px",
+      fontWeight: 700, // Bolder
+      fontSize: "28px", // Larger value
+      padding: "10px 0",
+      borderRadius: "0 0 8px 8px",
       userSelect: "none",
     },
     paymentHistory: {
-      backgroundColor: "#fef9f8",
-      borderRadius: "8px",
-      padding: "20px 24px 24px",
+      backgroundColor: "#ffffff",
+      borderRadius: "12px",
+      padding: "25px", // Increased padding
+      boxShadow: "0 4px 8px rgba(0,0,0,0.08)",
+      border: "1px solid #e0e0e0",
     },
     paymentHistoryTitle: {
       color: "#1a4ed8",
       fontWeight: 700,
-      fontSize: "16px",
-      margin: "0 0 16px 0",
+      fontSize: "20px", // Larger title
+      marginBottom: "20px", // More space
+      borderBottom: "2px solid #e6eaf3", // Underline
+      paddingBottom: "10px",
     },
     table: {
       width: "100%",
-      borderCollapse: "collapse",
-      fontSize: "12px",
+      borderCollapse: "separate", // For rounded corners on cells
+      borderSpacing: "0 8px", // Space between rows
+      fontSize: "14px",
       color: "#4a4a4a",
     },
     tableHeader: {
-      borderBottom: "1px solid #a7baff",
+      backgroundColor: "#e6eaf3", // Light blue header
+      borderRadius: "8px", // Rounded header
     },
     tableHeaderCell: {
       fontWeight: 600,
-      paddingBottom: "8px",
+      padding: "12px 10px", // Increased padding
       textAlign: "left",
+      color: "#1a4ed8", // Blue header text
+      "&:first-child": {
+        borderTopLeftRadius: "8px",
+        borderBottomLeftRadius: "8px",
+      },
+      "&:last-child": {
+        borderTopRightRadius: "8px",
+        borderBottomRightRadius: "8px",
+      },
     },
     tableBodyRow: {
-      borderBottom: "1px solid #d9d9d9",
+      backgroundColor: "#fefefe", // Slightly off-white for rows
+      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+      transition: "transform 0.2s ease-in-out",
+      "&:hover": {
+        transform: "translateY(-2px)", // Subtle lift on hover
+        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+      },
     },
     tableBodyCell: {
-      padding: "8px 0",
+      padding: "12px 10px",
+      // borderBottom: "1px solid #d9d9d9", // Removed bottom border for spacing
     },
     status: {
       textAlign: "center",
     },
     statusPending: {
-      backgroundColor: "#f7f9d9",
-      color: "#a3a92f",
-      border: "1px solid #a3a92f",
-      borderRadius: "12px",
-      padding: "2px 10px",
+      backgroundColor: "#fff3cd", // Yellowish background
+      color: "#856404", // Darker yellow text
+      border: "1px solid #ffeeba",
+      borderRadius: "16px", // More rounded
+      padding: "4px 12px",
       fontWeight: 600,
-      fontSize: "10px",
+      fontSize: "11px",
       display: "inline-block",
-      minWidth: "60px",
+      minWidth: "70px",
     },
     statusPaid: {
-      backgroundColor: "#d9f7d9",
-      color: "#2fa34f",
-      border: "1px solid #2fa34f",
-      borderRadius: "12px",
-      padding: "2px 10px",
+      backgroundColor: "#d4edda", // Greenish background
+      color: "#155724", // Darker green text
+      border: "1px solid #c3e6cb",
+      borderRadius: "16px",
+      padding: "4px 12px",
       fontWeight: 600,
-      fontSize: "10px",
+      fontSize: "11px",
       display: "inline-block",
-      minWidth: "60px",
+      minWidth: "70px",
     },
     statusFailed: {
-      backgroundColor: "#f9d9d9",
-      color: "#a32f2f",
-      border: "1px solid #a32f2f",
-      borderRadius: "12px",
-      padding: "2px 10px",
+      backgroundColor: "#f8d7da", // Reddish background
+      color: "#721c24", // Darker red text
+      border: "1px solid #f5c6cb",
+      borderRadius: "16px",
+      padding: "4px 12px",
       fontWeight: 600,
-      fontSize: "10px",
+      fontSize: "11px",
       display: "inline-block",
-      minWidth: "60px",
+      minWidth: "70px",
+    },
+    actionButtons: {
+      display: "flex",
+      gap: "8px",
     },
     confirmButton: {
-      backgroundColor: '#28a745',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
+      backgroundColor: "#28a745",
+      color: "#fff",
+      padding: "8px 12px",
+      borderRadius: "6px",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: "600",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#218838",
+      },
     },
     rejectButton: {
-      backgroundColor: '#dc3545',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      color: '#fff'
-    },
-    buttonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
-      textAlign: 'center',
+      backgroundColor: "#dc3545",
+      color: "#fff",
+      padding: "8px 12px",
+      borderRadius: "6px",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: "600",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#c82333",
+      },
     },
     detailButton: {
-      backgroundColor: '#0000ff',
-      color:"#fff",
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
+      backgroundColor: "#007bff", // Blue for detail
+      color: "#fff",
+      padding: "8px 12px",
+      borderRadius: "6px",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: "600",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#0056b3",
+      },
+    },
+    modalOverlay: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000,
+      padding: "20px",
+      overflowY: "auto",
+    },
+    modalContent: {
+      backgroundColor: "white",
+      padding: "30px",
+      borderRadius: "12px",
+      maxWidth: "600px",
+      width: "100%",
+      maxHeight: "90vh",
+      overflowY: "auto",
+      boxShadow: "0 5px 15px rgba(0,0,0,0.3)",
+      position: "relative",
+    },
+    modalCloseButton: {
+      position: "absolute",
+      top: "15px",
+      right: "15px",
+      backgroundColor: "transparent",
+      border: "none",
+      fontSize: "24px",
+      cursor: "pointer",
+      color: "#555",
+      "&:hover": {
+        color: "#333",
+      },
+    },
+    modalTitle: {
+      marginBottom: "20px",
+      color: "#1a4ed8",
+      fontSize: "22px",
+      borderBottom: "1px solid #eee",
+      paddingBottom: "10px",
+    },
+    modalDetailText: {
+      marginBottom: "10px",
+      fontSize: "16px",
+      color: "#333",
+    },
+    modalImage: {
+      maxWidth: "100%",
+      marginTop: "20px",
+      borderRadius: "8px",
+      boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+    },
+    closeModalButton: {
+      marginTop: "30px",
+      padding: "10px 20px",
+      backgroundColor: "#6c757d", // Grey close button
+      color: "#fff",
+      borderRadius: "8px",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "16px",
+      fontWeight: "600",
+      transition: "background-color 0.3s ease",
+      "&:hover": {
+        backgroundColor: "#5a6268",
+      },
+    },
+    loadingMessage: {
+      textAlign: "center",
+      padding: "20px",
+      fontSize: "18px",
+      color: "#555",
+    },
+    errorMessage: {
+      textAlign: "center",
+      padding: "20px",
+      fontSize: "18px",
+      color: "#dc3545",
+      backgroundColor: "#f8d7da",
+      borderRadius: "8px",
+      margin: "20px 0",
+      border: "1px solid #f5c6cb",
     },
   };
 
   return (
     <div>
+      <title>Planify - Admin Dashboard</title>
       <header style={styles.header}>
-         <title>Planify - Admin</title>
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-          integrity="sha512-yada..."
-          crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
-        />
         <img
           alt="Blue square icon with white checkmark inside"
           style={styles.headerImg}
           src="/logo%20planify%20new.png"
         />
         <div style={styles.logoText}>Planify</div>
-        <div style={styles.title}>Dashboard</div>
+        <div style={styles.title}>Admin Dashboard</div>
         <a style={styles.signout} onClick={handleLogout}>
-          <i className="fas fa-sign-out-alt" style={styles.signoutIcon}></i>{" "}
-          Sign Out
+          <FaSignOutAlt style={styles.signoutIcon} /> Sign Out
         </a>
       </header>
+
       <main style={styles.main}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "10px",
-            marginBottom: "24px",
-          }}
-        >
+        <section style={styles.welcomeSection}>
           <div
             aria-label="Welcome message"
             style={styles.helloAdmin}
@@ -413,126 +560,209 @@ const Dashboard = () => {
 
           <nav style={styles.navButtons}>
             <div
-              style={styles.userContainer}
-              onClick={() => (window.location.href = "/dshbrd_Admin")}
+              style={{
+                ...styles.navButtonContainer,
+                ...styles.navButtonContainerActive,
+              }}
+              onClick={() => navigate("/dshbrd_Admin")}
             >
-              <i className="fas fa-folder" style={styles.btnDashboardIcon}></i>
-              <div style={styles.textContainer}>
-                <span>Dashboard</span>
-              </div>
+              <FaFolder style={styles.navButtonIcon} />
+              <span style={styles.navButtonText}>Dashboard</span>
             </div>
 
-            <button
-              style={styles.iconUser}
-              onClick={() => (window.location.href = "/userManagement")}
+            <div
+              style={styles.navButtonContainer}
+              onClick={() => navigate("/userManagement")}
             >
-              <i className="fas fa-user" style={styles.iconUser}></i>
-            </button>
+              <FaUser style={styles.navButtonIcon} />
+              <span style={styles.navButtonText}>Users</span>
+            </div>
 
-            <button
-              style={styles.iconSend}
-              onClick={() => (window.location.href = "/send_Admin")}
+            <div
+              style={styles.navButtonContainer}
+              onClick={() => navigate("/send_Admin")}
             >
-              <i className="fas fa-paper-plane" style={styles.iconSend}></i>
-            </button>
+              <FaPaperPlane style={styles.navButtonIcon} />
+              <span style={styles.navButtonText}>Send Notification</span>
+            </div>
           </nav>
-        </div>
+        </section>
 
         <section aria-label="Statistics summary" style={styles.statsContainer}>
           <div style={styles.statBox}>
-            <div style={styles.statLabel}>User</div>
-            <div style={styles.statValue}>450</div>
+            <div style={styles.statLabel}>Total Users</div>
+            <div style={styles.statValue}>450</div> {/* Placeholder data */}
           </div>
           <div style={styles.statBox}>
-            <div style={styles.statLabel}>Notification Sent</div>
-            <div style={styles.statValue}>5.667</div>
+            <div style={styles.statLabel}>Notifications Sent</div>
+            <div style={styles.statValue}>5,667</div> {/* Placeholder data */}
           </div>
           <div style={styles.statBox}>
-            <div style={styles.statLabel}>Checks Made</div>
-            <div style={styles.statValue}>4.350</div>
+            <div style={styles.statLabel}>Payments Processed</div>
+            <div style={styles.statValue}>4,350</div> {/* Placeholder data */}
           </div>
         </section>
+
         <section aria-label="Payment History" style={styles.paymentHistory}>
           <h2 style={styles.paymentHistoryTitle}>Payment History</h2>
-          <table style={styles.table}>
-            <thead>
-              <tr style={styles.tableHeader}>
-                <th style={styles.tableHeaderCell}>Name</th>
-                <th style={styles.tableHeaderCell}>Email</th>
-                <th style={styles.tableHeaderCell}>Date</th>
-                <th style={styles.tableHeaderCell}>Time</th>
-                <th style={styles.tableHeaderCell}>Status</th>
-                <th style={styles.tableHeaderCell}>Payment Amount</th>
-                <th style={styles.tableHeaderCell}>Action</th>
-                <th style={styles.tableHeaderCell}>Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-            {payments.length === 0 ? (
-              <tr>
-                <td colSpan="8" style={{ textAlign: "center", padding: "10px" }}>
-                  Tidak ada data pembayaran.
-                </td>
-              </tr>
-            ) : (
-              payments.map((payment) => (
-                <tr key={payment.id} style={styles.tableBodyRow}>
-                  <td style={styles.tableBodyCell}>{payment.user_name}</td>
-                  <td style={styles.tableBodyCell}>{payment.user_email}</td>
-                  <td style={styles.tableBodyCell}>{new Date(payment.payment_date).toLocaleDateString("id-ID",{day: "numeric",month: "long",year: "numeric"})}</td>
-                  <td style={styles.tableBodyCell}>{new Date(payment.created_at).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</td>
-                  <td style={styles.status}>
-                    {payment.status === "pending" ? (
-                      <span style={styles.statusPending}>Pending</span>
-                    ) : payment.status === "confirmed" ? (
-                      <span style={styles.statusPaid}>Paid</span>
-                    ) : (
-                      <span style={styles.statusFailed}>Failed</span>
-                    )}
-                  </td>
-                  <td style={styles.tableBodyCell}>Rp. {payment.amount}</td>
-                  <td>
-                    <button style={styles.confirmButton} onClick={() => confirmPayment(payment.id)}>Confirm</button>
-                    <button style={styles.rejectButton} onClick={() => rejectPayment(payment.id)}>Reject</button>
-                  </td>
-                  <td>
-                    <button style={styles.detailButton} onClick={() => fetchPaymentDetail(payment.id)}>Detail</button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
 
-          </table>
+          {loading ? (
+            <p style={styles.loadingMessage}>Loading payments...</p>
+          ) : error ? (
+            <p style={styles.errorMessage}>{error}</p>
+          ) : (
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeader}>
+                  <th style={styles.tableHeaderCell}>Name</th>
+                  <th style={styles.tableHeaderCell}>Email</th>
+                  <th style={styles.tableHeaderCell}>Date</th>
+                  <th style={styles.tableHeaderCell}>Time</th>
+                  <th style={styles.tableHeaderCell}>Status</th>
+                  <th style={styles.tableHeaderCell}>Amount</th>
+                  <th style={styles.tableHeaderCell}>Actions</th>
+                  <th style={styles.tableHeaderCell}>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="8"
+                      style={{ textAlign: "center", padding: "20px" }}
+                    >
+                      No payment data available.
+                    </td>
+                  </tr>
+                ) : (
+                  payments.map((payment) => (
+                    <tr key={payment.id} style={styles.tableBodyRow}>
+                      <td style={styles.tableBodyCell}>
+                        {payment.user_name}
+                      </td>
+                      <td style={styles.tableBodyCell}>
+                        {payment.user_email}
+                      </td>
+                      <td style={styles.tableBodyCell}>
+                        {new Date(payment.payment_date).toLocaleDateString(
+                          "en-US",
+                          { day: "numeric", month: "short", year: "numeric" }
+                        )}
+                      </td>
+                      <td style={styles.tableBodyCell}>
+                        {new Date(payment.created_at).toLocaleTimeString(
+                          "en-US",
+                          { hour: "2-digit", minute: "2-digit" }
+                        )}
+                      </td>
+                      <td style={styles.status}>
+                        {payment.status === "pending" && (
+                          <span style={styles.statusPending}>Pending</span>
+                        )}
+                        {payment.status === "confirmed" && (
+                          <span style={styles.statusPaid}>Paid</span>
+                        )}
+                        {payment.status === "rejected" && (
+                          <span style={styles.statusFailed}>Failed</span>
+                        )}
+                      </td>
+                      <td style={styles.tableBodyCell}>
+                        Rp. {parseInt(payment.amount).toLocaleString("id-ID")}
+                      </td>
+                      <td style={styles.actionButtons}>
+                        {payment.status === "pending" && (
+                          <>
+                            <button
+                              style={styles.confirmButton}
+                              onClick={() => confirmPayment(payment.id)}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              style={styles.rejectButton}
+                              onClick={() => rejectPayment(payment.id)}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {payment.status !== "pending" && (
+                          <button style={styles.detailButton} disabled>
+                            Actioned
+                          </button>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          style={styles.detailButton}
+                          onClick={() => fetchPaymentDetail(payment.id)}
+                        >
+                          <FaEllipsisV />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </section>
       </main>
+
       {showModal && selectedPayment && (
-    <div style={{
-  position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-  backgroundColor: "rgba(0, 0, 0, 0.6)", display: "flex",
-  justifyContent: "center", alignItems: "center", zIndex: 1000,
-  overflowY: "auto", padding: "20px" // agar ada ruang saat di-scroll
-}}>
-  <div style={{
-    backgroundColor: "white", padding: "20px", borderRadius: "8px",
-    maxWidth: "500px", width: "100%", maxHeight: "90vh", overflowY: "auto"
-  }}>
-    <h3 style={{ marginBottom: "10px" }}>Detail Pembayaran</h3>
-    <p><strong>Nama:</strong> {selectedPayment.name}</p>
-    <p><strong>Email:</strong> {selectedPayment.email}</p>
-    <p><strong>Tanggal:</strong> {new Date(selectedPayment.payment_date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
-    <p><strong>Waktu:</strong> {new Date(selectedPayment.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</p>
-    <p><strong>Status:</strong> {selectedPayment.status}</p>
-    <p><strong>Jumlah:</strong> Rp. {selectedPayment.amount}</p>
-    <p><strong>Bukti Pembayaran:</strong></p>
-    <img src={"http://127.0.0.1:3000/uploads/" + selectedPayment.image} alt="Bukti Pembayaran" style={{ maxWidth: "100%", marginTop: "10px" }} />
-    <br />
-    <button onClick={() => setShowModal(false)} style={{ marginTop: "20px", padding: "8px 16px" }}>Tutup</button>
-  </div>
-</div>
-
-  )}
-
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <button
+              onClick={() => setShowModal(false)}
+              style={styles.modalCloseButton}
+            >
+              <FaTimes />
+            </button>
+            <h3 style={styles.modalTitle}>Payment Details</h3>
+            <p style={styles.modalDetailText}>
+              <strong>Name:</strong> {selectedPayment.name}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Email:</strong> {selectedPayment.email}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Date:</strong>{" "}
+              {new Date(selectedPayment.payment_date).toLocaleDateString(
+                "en-US",
+                { day: "numeric", month: "long", year: "numeric" }
+              )}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Time:</strong>{" "}
+              {new Date(selectedPayment.created_at).toLocaleTimeString(
+                "en-US",
+                { hour: "2-digit", minute: "2-digit" }
+              )}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Status:</strong> {selectedPayment.status}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Amount:</strong> Rp.{" "}
+              {parseInt(selectedPayment.amount).toLocaleString("id-ID")}
+            </p>
+            <p style={styles.modalDetailText}>
+              <strong>Payment Proof:</strong>
+            </p>
+            <img
+              src={"http://127.0.0.1:3000/uploads/" + selectedPayment.image}
+              alt="Payment Proof"
+              style={styles.modalImage}
+            />
+            <button
+              onClick={() => setShowModal(false)}
+              style={styles.closeModalButton}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

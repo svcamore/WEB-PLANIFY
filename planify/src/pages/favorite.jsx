@@ -1,66 +1,106 @@
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "../components/sidebar";
 import "../pages/works.css";
 
 function App() {
   const API_URL = process.env.REACT_APP_API_URL;
   const [showRightSidebar, setShowRightSidebar] = useState(false);
-  const [favorites, setFavorites] = useState([]);
+  const [workbooks, setWorkbooks] = useState([]); // Change 'favorites' to 'workbooks' for clarity
   const [user, setUser] = useState(null);
-  const fetchUser = async () => {
-  const token = localStorage.getItem("token"); // Ambil token dari localStorage
-  if (!token) return;
 
-  try {
-    const res = await fetch(API_URL+"/auth/user", {
-      method: "GET",
+  const fetchUser = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(API_URL + "/auth/user", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal fetch user");
+      }
+
+      const data = await res.json();
+      setUser(data);
+    } catch (err) {
+      console.error("Gagal ambil user:", err);
+    }
+  };
+
+  const fetchFavoriteWorkbooks = () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(API_URL + "/workbook", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // Filter for workbooks where is_favorite is 1 (true) and not archived
+        const favorited = data.filter(
+          (item) => item.is_favorite === 1 && item.is_archived === 0
+        );
+        const mapped = favorited.map((item) => ({
+          id: item.id,
+          title: item.title,
+          image: item.thumbnail,
+          createdAt: new Date(item.last_edited_at).toLocaleString(),
+          isFavorite: item.is_favorite === 1,
+        }));
+        setWorkbooks(mapped); // Set the favorited workbooks to state
+      })
+      .catch((err) => console.error("Fetch error:", err));
+  };
 
-    if (!res.ok) {
-      throw new Error("Gagal fetch user");
+  const handleFavoriteClick = async (id, currentFavoriteStatus) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/workbook/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          is_favorite: currentFavoriteStatus ? 0 : 1, // Toggle the favorite status
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("Validation errors:", error);
+        throw new Error("Gagal mengubah status favorit workbook");
+      }
+
+      alert(
+        currentFavoriteStatus
+          ? "Berhasil menghapus dari favorit"
+          : "Berhasil menambahkan ke favorit"
+      );
+      fetchFavoriteWorkbooks(); // Re-fetch to update the list
+    } catch (err) {
+      console.error("Error updating workbook favorite status:", err);
+      alert("Gagal mengubah status favorit workbook.");
     }
+  };
 
-    const data = await res.json();
-    setUser(data);
-  } catch (err) {
-    console.error("Gagal ambil user:", err);
-  }
-};
+  useEffect(() => {
+    fetchUser();
+    fetchFavoriteWorkbooks(); // Fetch favorite workbooks on component mount
+  }, []);
+
   const toggleRightSidebar = () => {
     setShowRightSidebar(!showRightSidebar);
   };
 
-  const handleFavoriteClick = (item) => {
-    if (favorites.includes(item)) {
-      setFavorites(favorites.filter((fav) => fav !== item)); // Hapus dari favorit
-    } else {
-      setFavorites([...favorites, item]); // Tambah ke favorit
-    }
-  };
-
-  const workbooks = [
-    {
-      title: "My Planner",
-      image: "https://source.unsplash.com/featured/?planner",
-      createdAt: "2 hours ago",
-    },
-    {
-      title: "Wuling's Workbook",
-      image: "https://source.unsplash.com/featured/?laptop,code",
-      createdAt: "2 weeks ago",
-    },
-    {
-      title: "Workbook Group 7",
-      image: "https://source.unsplash.com/featured/?notes,desk",
-      createdAt: "42 minutes ago",
-    },
-  ];
-  useEffect(() => {
-    fetchUser();
-    }, []);
   return (
     <>
       <meta charSet="utf-8" />
@@ -78,13 +118,31 @@ function App() {
       <div className="d-flex">
         {/* Sidebar kiri */}
         <div className="sidebar-left">
-          <i className="fas fa-home toggle-sidebar mb-2" onClick={toggleRightSidebar} />
-          <i className="fas fa-clock toggle-sidebar mb-2" onClick={toggleRightSidebar} />
-          <i className="fas fa-star toggle-sidebar" onClick={toggleRightSidebar} />
+          <i
+            className="fas fa-home toggle-sidebar mb-2"
+            onClick={toggleRightSidebar}
+          />
+          <i
+            className="fas fa-clock toggle-sidebar mb-2"
+            onClick={toggleRightSidebar}
+          />
+          <i
+            className="fas fa-star toggle-sidebar"
+            onClick={toggleRightSidebar}
+          />
           <div className="sidebar-bottom-icons">
-            <i className="fas fa-gem toggle-sidebar mb-1" onClick={toggleRightSidebar} />
-            <i className="fas fa-cog toggle-sidebar mb-1" onClick={toggleRightSidebar} />
-            <i className="fas fa-sign-out-alt toggle-sidebar" onClick={toggleRightSidebar} />
+            <i
+              className="fas fa-gem toggle-sidebar mb-1"
+              onClick={toggleRightSidebar}
+            />
+            <i
+              className="fas fa-cog toggle-sidebar mb-1"
+              onClick={toggleRightSidebar}
+            />
+            <i
+              className="fas fa-sign-out-alt toggle-sidebar"
+              onClick={toggleRightSidebar}
+            />
           </div>
         </div>
 
@@ -137,8 +195,10 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {workbooks.map((item, index) => (
-                  <tr key={index}>
+                {workbooks.map((item) => (
+                  <tr key={item.id}>
+                    {" "}
+                    {/* Use item.id as key */}
                     <td className="d-flex align-items-center">
                       <img
                         src={item.image}
@@ -151,8 +211,12 @@ function App() {
                     <td>
                       <div className="d-flex align-items-center">
                         <i
-                          className={`fas fa-star ${favorites.includes(item) ? 'text-warning' : 'text-muted'}`}
-                          onClick={() => handleFavoriteClick(item)}
+                          className={`fas fa-star ${
+                            item.isFavorite ? "text-warning" : "text-muted"
+                          }`}
+                          onClick={() =>
+                            handleFavoriteClick(item.id, item.isFavorite)
+                          }
                           style={{ cursor: "pointer", fontSize: "18px" }}
                         />
                       </div>

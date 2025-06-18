@@ -151,13 +151,7 @@ const AccountSettings = () => {
                     </p>
                     <ul className="list-unstyled text-start">
                       <li>
-                        <span className="check-icon">✔</span>Access to group chat
-                      </li>
-                      <li>
                         <span className="check-icon">✔</span>Customize card backgrounds
-                      </li>
-                      <li>
-                        <span className="check-icon">✔</span>Connect with multiple friends at once
                       </li>
                     </ul>
                     {/* <button className="btn btn-select" onClick={() => setPlan("monthly")}>

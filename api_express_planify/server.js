@@ -269,7 +269,8 @@ app.put('/api/workbook/:id', authMiddleware, (req, res) => {
   const userId = req.userId;
   const now = new Date();
 
-  const allowedFields = ['title', 'thumbnail', 'is_archived'];
+  // Add 'is_favorite' to the allowedFields array
+  const allowedFields = ['title', 'thumbnail', 'is_archived', 'is_favorite']; 
   const fieldsToUpdate = [];
   const values = [];
 

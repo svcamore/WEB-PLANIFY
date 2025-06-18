@@ -33,51 +33,53 @@ function App() {
       time: "10 menit lalu",
     },
   ];
-const fetchWorkbooks = () => {
-  const token = localStorage.getItem("token");
-  if (!token) return;
 
-  fetch(API_URL+"/workbook", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      const filtered = data.filter((item) => item.is_archived === 0);
-      const mapped = filtered.map((item) => ({
-        id: item.id,
-        title: item.title,
-        image: item.thumbnail,
-        createdAt: new Date(item.last_edited_at).toLocaleString(),
-      }));
-      setWorkbooks(mapped);
-    })
-    .catch((err) => console.error("Fetch error:", err));
-};
+  const fetchWorkbooks = () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-const fetchUser = async () => {
-  const token = localStorage.getItem("token"); // Ambil token dari localStorage
-  if (!token) return;
-
-  try {
-    const res = await fetch(API_URL+"/auth/user", {
-      method: "GET",
+    fetch(API_URL + "/workbook", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const filtered = data.filter((item) => item.is_archived === 0);
+        const mapped = filtered.map((item) => ({
+          id: item.id,
+          title: item.title,
+          image: item.thumbnail,
+          createdAt: new Date(item.last_edited_at).toLocaleString(),
+          isFavorite: item.is_favorite === 1, // Map is_favorite from API
+        }));
+        setWorkbooks(mapped);
+      })
+      .catch((err) => console.error("Fetch error:", err));
+  };
 
-    if (!res.ok) {
-      throw new Error("Gagal fetch user");
+  const fetchUser = async () => {
+    const token = localStorage.getItem("token"); // Ambil token dari localStorage
+    if (!token) return;
+
+    try {
+      const res = await fetch(API_URL + "/auth/user", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal fetch user");
+      }
+
+      const data = await res.json();
+      setUser(data);
+    } catch (err) {
+      console.error("Gagal ambil user:", err);
     }
-
-    const data = await res.json();
-    setUser(data);
-  } catch (err) {
-    console.error("Gagal ambil user:", err);
-  }
-};
+  };
 
   useEffect(() => {
     function handleClickOutsideMenu(event) {
@@ -96,10 +98,10 @@ const fetchUser = async () => {
 
     fetchWorkbooks();
     fetchUser();
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutsideMenu);
-      };
-    }, []);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMenu);
+    };
+  }, []);
 
   const toggleRightSidebar = () => {
     setShowRightSidebar(!showRightSidebar);
@@ -111,6 +113,7 @@ const fetchUser = async () => {
     setTitle("");
     setImagePreview(null);
     setEditingIndex(null);
+    setImageUrl(null); // Reset image URL when closing modal
   };
 
   const handleImageUpload = (e) => {
@@ -125,7 +128,7 @@ const fetchUser = async () => {
         window.location.href = "/login";
         return;
       }
-      fetch(API_URL+"/upload?nameFolder=WORKBOOK", {
+      fetch(API_URL + "/upload?nameFolder=WORKBOOK", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -134,199 +137,206 @@ const fetchUser = async () => {
       })
         .then((res) => res.json())
         .then((data) => {
-          setImageUrl("http://127.0.0.1:3000"+data.url)
+          setImageUrl("http://127.0.0.1:3000" + data.url);
           console.log("URL gambar:", data.url);
         })
         .catch((err) => console.error("Upload gagal:", err));
     }
   };
 
-  // const handleCreateOrUpdateWorkbook = (e) => {
-  //   e.preventDefault();
-  //   // if (!title) return;
-
-  //   // const newWorkbook = {
-      // id: editingIndex !== null ? workbooks[editingIndex].id : Date.now(),
-  //   //   title,
-  //   //   image: imagePreview || "https://source.unsplash.com/featured/?workbook",
-  //   //   createdAt: editingIndex !== null ? "Updated just now" : "Just now",
-  //   // };
-
-  //   // if (editingIndex !== null) {
-  //   //   const updatedWorkbooks = workbooks.map((wb, index) =>
-  //   //     index === editingIndex ? newWorkbook : wb
-  //   //   );
-  //   //   setWorkbooks(updatedWorkbooks);
-  //   // } else {
-  //   //   setWorkbooks([newWorkbook, ...workbooks]);
-  //   // }
-
-  //   closeModal();
-  // };
-  const handleCreateOrUpdateWorkbook = async (e,id) => {
+  const handleCreateOrUpdateWorkbook = async (e, id) => {
     e.preventDefault();
-  const token = localStorage.getItem("token");
-  if (!token) {
-    window.location.href = "/login";
-    return;
-  }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
 
-  const newWorkbook = {
-    title: title, // Atau bisa kamu ganti jadi input
-    thumbnail: imageUrl, // Ganti dengan thumbnail default atau input user
-  };
-  if (editingIndex !== null) {
-    handleEditProsesWorkbook(workbookId,title,imageUrl);
+    const newWorkbook = {
+      title: title,
+      thumbnail: imageUrl,
+    };
+
+    if (editingIndex !== null) {
+      handleEditProsesWorkbook(workbookId, title, imageUrl);
+      await fetchWorkbooks();
+      closeModal();
+      return;
+    }
+    try {
+      const response = await fetch(API_URL + "/workbook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newWorkbook),
+      });
+      if (!response.ok) {
+        throw new Error("Gagal membuat workbook");
+      }
+
+      const result = await response.json();
+
+      setWorkbooks((prev) => [
+        {
+          id: result.id,
+          title: result.title,
+          image: result.thumbnail,
+          createdAt: new Date(result.last_edited_at).toLocaleString(),
+          isFavorite: result.is_favorite === 1,
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      console.error("Error creating workbook:", err);
+      alert("Gagal membuat workbook.");
+    }
     await fetchWorkbooks();
     closeModal();
-    return;
-  }
-  try {
-    const response = await fetch(API_URL+"/workbook", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(newWorkbook),
-    });
-    if (!response.ok) {
-      throw new Error("Gagal membuat workbook");
-    }
-
-    const result = await response.json();
-
-    // Tambahkan workbook baru ke state
-    setWorkbooks((prev) => [
-      {
-        id: result.id,
-        title: result.title,
-        image: result.thumbnail,
-        createdAt: new Date(result.last_edited_at).toLocaleString(),
-      },
-      ...prev,
-    ]);
-  } catch (err) {
-    console.error("Error creating workbook:", err);
-    alert("Gagal membuat workbook.");
-  }
-  await fetchWorkbooks();
-  closeModal();
-};
-const handleEditProsesWorkbook = async (id, updatedTitle, updatedThumbnail = null) => {
-  const token = localStorage.getItem("token");
-  if (!token) return;
-
-  // Kirim sebagai JSON biasa
-  const bodyData = {
-    title: updatedTitle,
   };
 
-  // Tambahkan thumbnail jika ada
-  if (updatedThumbnail) {
-    bodyData.thumbnail = updatedThumbnail; // Pastikan thumbnail berupa string (path/link), bukan File
-  }
+  const handleEditProsesWorkbook = async (
+    id,
+    updatedTitle,
+    updatedThumbnail = null
+  ) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-  try {
-    const res = await fetch(`${API_URL}/workbook/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(bodyData),
-    });
+    const bodyData = {
+      title: updatedTitle,
+    };
 
-    if (!res.ok) {
-      const error = await res.json();
-      console.error("Validation errors:", error);
-      throw new Error("Gagal mengedit workbook");
+    if (updatedThumbnail) {
+      bodyData.thumbnail = updatedThumbnail;
     }
 
-    // const result = await res.json();
-    // console.log("Workbook updated:", result);
-    await fetchWorkbooks();
-  } catch (err) {
-    console.error("Error updating workbook:", err);
-    alert("Gagal edit workbook.");
-  }
-};
+    try {
+      const res = await fetch(`${API_URL}/workbook/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(bodyData),
+      });
 
-const handleArchiveWorkbook = async (id) => {
-  const token = localStorage.getItem("token");
-  if (!token) return;
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("Validation errors:", error);
+        throw new Error("Gagal mengedit workbook");
+      }
 
-  try {
-    const res = await fetch(`${API_URL}/workbook/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        is_archived: 1,
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      console.error("Validation errors:", error);
-      throw new Error("Gagal archive workbook");
+      await fetchWorkbooks();
+    } catch (err) {
+      console.error("Error updating workbook:", err);
+      alert("Gagal edit workbook.");
     }
+  };
 
-    alert("Berhasil archive workbook");
-    await fetchWorkbooks();
-  } catch (err) {
-    console.error("Error updating workbook:", err);
-    alert("Gagal archive workbook.");
-  }
-};
+  const handleArchiveWorkbook = async (id) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-const handleDeleteWorkbook = async (id) => {
-  const token = localStorage.getItem("token");
-  if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/workbook/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          is_archived: 1,
+        }),
+      });
 
-  const confirmDelete = window.confirm("Yakin ingin menghapus workbook ini?");
-  if (!confirmDelete) return;
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("Validation errors:", error);
+        throw new Error("Gagal archive workbook");
+      }
 
-  try {
-    const res = await fetch(`${API_URL}/workbook/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      console.error("Gagal menghapus:", error);
-      throw new Error("Gagal menghapus workbook");
+      alert("Berhasil archive workbook");
+      await fetchWorkbooks();
+    } catch (err) {
+      console.error("Error updating workbook:", err);
+      alert("Gagal archive workbook.");
     }
+  };
 
-    // Refresh konten setelah delete
-    await fetchWorkbooks();
+  const handleFavoriteWorkbook = async (id, currentFavoriteStatus) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-  } catch (err) {
-    console.error("Error deleting workbook:", err);
-    alert("Gagal menghapus workbook.");
-  }
-};
+    try {
+      const res = await fetch(`${API_URL}/workbook/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          is_favorite: currentFavoriteStatus ? 0 : 1, // Toggle the favorite status
+        }),
+      });
 
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("Validation errors:", error);
+        throw new Error("Gagal mengubah status favorit workbook");
+      }
+
+      alert(
+        currentFavoriteStatus
+          ? "Berhasil menghapus dari favorit"
+          : "Berhasil menambahkan ke favorit"
+      );
+      await fetchWorkbooks();
+    } catch (err) {
+      console.error("Error updating workbook favorite status:", err);
+      alert("Gagal mengubah status favorit workbook.");
+    }
+  };
+
+  const handleDeleteWorkbook = async (id) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const confirmDelete = window.confirm("Yakin ingin menghapus workbook ini?");
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${API_URL}/workbook/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("Gagal menghapus:", error);
+        throw new Error("Gagal menghapus workbook");
+      }
+
+      await fetchWorkbooks();
+    } catch (err) {
+      console.error("Error deleting workbook:", err);
+      alert("Gagal menghapus workbook.");
+    }
+  };
 
   const handleEditWorkbook = (index) => {
     const workbookToEdit = workbooks[index];
     setTitle(workbookToEdit.title);
     setImagePreview(workbookToEdit.image);
+    setImageUrl(workbookToEdit.image); // Set imageUrl when editing
     setEditingIndex(index);
-    setWorkbookId(workbookToEdit.id)
+    setWorkbookId(workbookToEdit.id);
     openModal();
   };
-
-  // const handleDeleteWorkbook = (index) => {
-  //   const updatedWorkbooks = workbooks.filter((_, i) => i !== index);
-  //   setWorkbooks(updatedWorkbooks);
-  // };
 
   const toggleNoteMenu = (id, e) => {
     e.stopPropagation();
@@ -334,14 +344,20 @@ const handleDeleteWorkbook = async (id) => {
   };
 
   const handleNoteAction = (action, id) => {
+    const workbook = workbooks.find((wb) => wb.id === id);
     const index = workbooks.findIndex((wb) => wb.id === id);
+
     switch (action) {
       case "Edit":
         handleEditWorkbook(index);
         break;
       case "Archived":
         handleArchiveWorkbook(id);
-        console.log(`Archived for: ${id}`);
+        break;
+      case "Favorite":
+        if (workbook) {
+          handleFavoriteWorkbook(id, workbook.isFavorite);
+        }
         break;
       case "Delete":
         handleDeleteWorkbook(id);
@@ -381,14 +397,13 @@ const handleDeleteWorkbook = async (id) => {
             onClick={toggleRightSidebar}
           />
           <div className="sidebar-bottom-icons">
-            {
-              (!user || user.tier !== "premium") && (
+            {!user ||
+              (user.tier !== "premium" && (
                 <i
                   className="fas fa-gem toggle-sidebar mb-1"
                   onClick={toggleRightSidebar}
                 />
-              )
-            }
+              ))}
             <i
               className="fas fa-cog toggle-sidebar mb-1"
               onClick={toggleRightSidebar}
@@ -424,29 +439,30 @@ const handleDeleteWorkbook = async (id) => {
             </div>
 
             <nav aria-label="User  actions" className="nav-actions">
-              <button className="btn-icon" aria-label="Notification" onClick={() => setIsNotifOpen(true)}>
+              <button
+                className="btn-icon"
+                aria-label="Notification"
+                onClick={() => setIsNotifOpen(true)}
+              >
                 <i className="far fa-bell"></i>
               </button>
-              {
-                (!user || user.tier !== "premium") && (
+              {!user ||
+                (user.tier !== "premium" && (
                   <button className="premium-btn" aria-label="Go Premium">
                     Go Premium
                   </button>
-                )
-              }
-              {
-                user ?(
-                  <img
-                    className="user-avatar"
-                    src={"http://127.0.0.1:3000"+user.photo_profile}
-                    alt={user.name}
-                    width="40"
-                    height="40"
-                  />
-                ):(
-                  <p>Loading...</p>
-                )
-              }
+                ))}
+              {user ? (
+                <img
+                  className="user-avatar"
+                  src={"http://127.0.0.1:3000" + user.photo_profile}
+                  alt={user.name}
+                  width="40"
+                  height="40"
+                />
+              ) : (
+                <p>Loading...</p>
+              )}
             </nav>
           </header>
 
@@ -455,33 +471,29 @@ const handleDeleteWorkbook = async (id) => {
             {/* Welcome Section */}
             <div className="row mb-4">
               <div className="col-md-8">
-                {
-                  user ?(
-                    <>
+                {user ? (
+                  <>
                     <h1 className="h2 mb-2">Hi, {user.name} !</h1>
-                    </>
-                  ):(
-                    <p>Loading...</p>
-                  )
-                }
+                  </>
+                ) : (
+                  <p>Loading...</p>
+                )}
                 <p className="text-muted">
                   What's on your mind today? Let's get things done!
                 </p>
               </div>
-              {
-                user ? (
-                  <div className="col-md-4 text-end">
-                    <img
-                      src={"http://127.0.0.1:3000"+user.photo_profile}
-                      alt={user.name}
-                      className="img-fluid"
-                      style={{ maxWidth: "100px", height: "auto" }}
-                    />
-                  </div>
-                ):(
-                  <p>Loading...</p>
-                )
-              }
+              {user ? (
+                <div className="col-md-4 text-end">
+                  <img
+                    src={"http://127.0.0.1:3000" + user.photo_profile}
+                    alt={user.name}
+                    className="img-fluid"
+                    style={{ maxWidth: "100px", height: "auto" }}
+                  />
+                </div>
+              ) : (
+                <p>Loading...</p>
+              )}
             </div>
 
             {/* Workspace Section */}
@@ -509,12 +521,13 @@ const handleDeleteWorkbook = async (id) => {
 
                 {/* Workbook List */}
                 <div className="row">
-                  {workbooks.map((wb, index) => (
-                    
+                  {workbooks.map((wb) => (
                     <div className="col-md-3 col-sm-6 mb-3" key={wb.id}>
                       <div
                         className="card h-100 shadow card-hover"
-                        onClick={() => (window.location.href = "/kalender/"+wb.id)}
+                        onClick={() =>
+                          (window.location.href = "/kalender/" + wb.id)
+                        }
                         style={{ cursor: "pointer" }}
                       >
                         <img
@@ -524,7 +537,15 @@ const handleDeleteWorkbook = async (id) => {
                           style={{ height: "160px", objectFit: "cover" }}
                         />
                         <div className="card-body">
-                          <h5 className="card-title">{wb.title}</h5>
+                          <h5 className="card-title">
+                            {wb.title}{" "}
+                            {wb.isFavorite && (
+                              <i
+                                className="fas fa-star"
+                                style={{ color: "gold", marginLeft: "5px" }}
+                              ></i>
+                            )}
+                          </h5>
                           <p
                             className="text-muted"
                             style={{ fontSize: "0.9rem" }}
@@ -573,7 +594,7 @@ const handleDeleteWorkbook = async (id) => {
                                   padding: "8px 0",
                                 }}
                               >
-                                {["Edit", "Archived", "Delete"].map(
+                                {["Edit", "Favorite", "Archived", "Delete"].map(
                                   (action) => (
                                     <div
                                       key={action}
@@ -596,7 +617,11 @@ const handleDeleteWorkbook = async (id) => {
                                           "white")
                                       }
                                     >
-                                      {action}
+                                      {action === "Favorite"
+                                        ? wb.isFavorite
+                                          ? "Unfavorite"
+                                          : "Favorite"
+                                        : action}
                                     </div>
                                   )
                                 )}
@@ -662,7 +687,11 @@ const handleDeleteWorkbook = async (id) => {
                     </div>
 
                     <div className="modal-body">
-                      <form onSubmit={(e) => handleCreateOrUpdateWorkbook(e,editingIndex)}>
+                      <form
+                        onSubmit={(e) =>
+                          handleCreateOrUpdateWorkbook(e, editingIndex)
+                        }
+                      >
                         <div className="mb-3">
                           <label
                             htmlFor="workspace-name"

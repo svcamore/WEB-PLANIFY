@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../components/sidebar";
-import "../pages/works.css";
+import "../pages/works.css"; // Ensure this import is correct and applies works.css
 
 function App() {
   const [showRightSidebar, setShowRightSidebar] = useState(false);
@@ -51,7 +51,7 @@ const fetchUser = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    fetch("http://127.0.0.1:3000/api/workbook", {
+    fetch("http://127.00.1:3000/api/workbook", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -92,32 +92,30 @@ const fetchUser = async () => {
         {/* Left Sidebar */}
         <div className="sidebar-left">
           <i
-            className="fas fa-home toggle-sidebar mb-2"
+            className="fas fa-home toggle-sidebar sidebar-icon-item" // Added custom class
             onClick={toggleRightSidebar}
           />
           <i
-            className="fas fa-clock toggle-sidebar mb-2"
+            className="fas fa-clock toggle-sidebar sidebar-icon-item" // Added custom class
             onClick={toggleRightSidebar}
           />
+          {/* Removed the folder icon as requested */}
+          {/* <i className="fas fa-folder toggle-sidebar sidebar-icon-item" onClick={toggleRightSidebar} /> */}
           <i
-            className="fas fa-folder toggle-sidebar mb-1"
-            onClick={toggleRightSidebar}
-          />
-          <i
-            className="fas fa-star toggle-sidebar"
+            className="fas fa-star toggle-sidebar sidebar-icon-item" // Added custom class
             onClick={toggleRightSidebar}
           />
           <div className="sidebar-bottom-icons">
             <i
-              className="fas fa-gem toggle-sidebar mb-1"
+              className="fas fa-gem toggle-sidebar sidebar-icon-item" // Added custom class
               onClick={toggleRightSidebar}
             />
             <i
-              className="fas fa-cog toggle-sidebar mb-1"
+              className="fas fa-cog toggle-sidebar sidebar-icon-item" // Added custom class
               onClick={toggleRightSidebar}
             />
             <i
-              className="fas fa-sign-out-alt toggle-sidebar"
+              className="fas fa-sign-out-alt toggle-sidebar sidebar-icon-item" // Added custom class
               onClick={toggleRightSidebar}
             />
           </div>
