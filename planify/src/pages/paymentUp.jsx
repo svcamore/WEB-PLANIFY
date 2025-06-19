@@ -70,7 +70,7 @@ const PaymentPage = ({onSubmit}) => {
               className="logo d-flex align-items-center mb-2"
             >
               <img
-                src="/logo%20planify%20new.png"
+                src="/logoplanifynew.png"
                 alt="Planify Logo"
                 width="36"
                 height="36"

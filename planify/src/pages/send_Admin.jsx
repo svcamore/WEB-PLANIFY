@@ -348,7 +348,7 @@ const Reviews = () => {
         <img
           alt="Blue square icon with white checkmark inside"
           style={styles.headerImg}
-          src="/logo%20planify%20new.png"
+          src="/logoplanify.png"
         />
         <div style={styles.logoText}>Planify</div>
         <div style={styles.title}>Reviews</div>

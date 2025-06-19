@@ -335,7 +335,7 @@ const UserManagement = () => {
         <img
           alt="Blue square icon with white checkmark inside"
           style={styles.headerImg}
-          src="/logo%20planify%20new.png"
+          src="/logoplanifynew.png"
         />
         <div style={styles.logoText}>Planify</div>
         <div style={styles.title}>User Management</div>

@@ -7,22 +7,39 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
+// Konfigurasi Database
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
-  password: '', // ganti sesuai MySQL kamu
+  password: '', // Ganti sesuai password MySQL kamu
   database: 'api_planify'
 });
 
+// Kunci Rahasia JWT
 const JWT_SECRET = 'rahasia_jwt';
-const now = new Date();
 
+// Middleware untuk verifikasi token JWT
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ success: false, message: 'Token tidak tersedia' });
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ success: false, message: 'Format token salah' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ success: false, message: 'Token tidak valid' });
+    req.userId = user.id;
+    next();
+  });
+};
+
+// Middleware untuk memeriksa role admin
 const checkAdmin = (req, res, next) => {
   const userId = req.userId;
 
@@ -37,762 +54,400 @@ const checkAdmin = (req, res, next) => {
 
 /*
 =========================================================================================
-Konfigurasi Image
+User Authentication
 =========================================================================================
 */
-// Konfigurasi penyimpanan multer
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const username = req.userId ?? 'unknown'; // Pastikan `userName` tersedia di token
-    const nameFolder = req.query.nameFolder ?? 'other';
-    const userDir = path.join(__dirname, 'uploads', nameFolder+"_"+username);
 
-    // Cek dan buat folder user jika belum ada
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
-
-    cb(null, userDir);
-  },
-  filename: function (req, file, cb) {
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `${timestamp}${ext}`);
-  }
-});
-
-const upload = multer({ storage });
-
-/*
-=========================================================================================
-Authentication
-=========================================================================================
-*/
-app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, photo_profile, providers } = req.body;
-  if (!name || !email || !password || !photo_profile || !providers) {
-    return res.status(400).json({ success: false, message: 'Semua field wajib diisi' });
+// Registrasi User
+app.post('/auth/register', (req, res) => {
+  const { username, email, password, tier = 'user', avatar = 'default_avatar.jpg' } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ success: false, message: 'Username, email, dan password harus diisi' });
   }
 
-  db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-    if (results.length > 0) {
-      return res.status(409).json({ success: false, message: 'Email sudah digunakan' });
-    }
+  bcrypt.hash(password, 10, (err, hash) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengenkripsi password' });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    db.query(
-      'INSERT INTO users (name, email, password, photo_profile, providers,created_at,updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, photo_profile, providers, now, now],
-      (err, result) => {
-        if (err) return res.status(500).json({ success: false, message: 'Database error', error: err });
-
-        res.status(201).json({ success: true, message: 'Register berhasil!' });
+    db.query('INSERT INTO users (username, email, password, tier, avatar) VALUES (?, ?, ?, ?, ?)', [username, email, hash, tier, avatar], (err, result) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(409).json({ success: false, message: 'Username atau email sudah terdaftar' });
+        }
+        return res.status(500).json({ success: false, message: 'Gagal mendaftar user', error: err });
       }
-    );
-  });
-});
-
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ success: false, message: 'Email dan password wajib diisi' });
-  }
-
-  db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
-    if (err || results.length === 0) {
-      return res.status(401).json({ success: false, message: 'Email atau password salah!' });
-    }
-
-    const user = results[0];
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ success: false, message: 'Email atau password salah!' });
-    }
-
-    const token = jwt.sign({ id: user.id,role: user.tier }, JWT_SECRET, { expiresIn: '7d' });
-    delete user.password;
-
-    res.json({
-      success: true,
-      message: 'Login berhasil',
-      data: {
-        user,
-        token
-      }
+      res.status(201).json({ success: true, message: 'User berhasil didaftarkan' });
     });
   });
 });
 
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
+// Login User
+app.post('/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email dan password harus diisi' });
   }
 
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
-    req.userRole = decoded.role; // <-- pastikan token menyimpan role
-    next();
-  } catch (err) {
-    res.status(401).json({ message: 'Token tidak valid' });
-  }
-};
+  db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal login', error: err });
+    if (results.length === 0) return res.status(401).json({ success: false, message: 'Email atau password salah' });
 
-app.get('/api/auth/user', authMiddleware, (req, res) => {
-  db.query(
-    'SELECT id, name, email, photo_profile, tier, providers, created_at, updated_at FROM users WHERE id = ?',
-    [req.userId],
-    (err, results) => {
-      if (err || results.length === 0) {
-        return res.status(404).json({ message: 'User tidak ditemukan' });
-      }
-      res.json(results[0]);
-    }
-  );
-});
+    const user = results[0];
+    bcrypt.compare(password, user.password, (err, isMatch) => {
+      if (err) return res.status(500).json({ success: false, message: 'Gagal membandingkan password' });
+      if (!isMatch) return res.status(401).json({ success: false, message: 'Email atau password salah' });
 
-app.put('/api/auth/user', authMiddleware, (req, res) => {
-  const { name, photo_profile, tier } = req.body;
-  const updatedAt = new Date();
-  const fields = [];
-  const values = [];
-
-  if (name !== undefined) {
-    fields.push('name = ?');
-    values.push(name);
-  }
-  if (photo_profile !== undefined) {
-    fields.push('photo_profile = ?');
-    values.push(photo_profile);
-  }
-  if (tier !== undefined) {
-    fields.push('tier = ?');
-    values.push(tier);
-  }
-
-  if (fields.length === 0) {
-    return res.status(400).json({ success: false, message: 'Tidak ada data yang dikirim untuk diperbarui' });
-  }
-
-  // Tambahkan updated_at dan userId ke query
-  fields.push('updated_at = ?');
-  values.push(updatedAt);
-  values.push(req.userId); // untuk WHERE id = ?
-
-  const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
-
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: 'Gagal update user', error: err });
-    }
-
-    res.json({ success: true, message: 'Data user berhasil diupdate' });
+      const token = jwt.sign({ id: user.id, username: user.username, tier: user.tier }, JWT_SECRET, { expiresIn: '1h' });
+      res.json({ success: true, message: 'Login berhasil', token });
+    });
   });
 });
 
-// khusus password
-app.put('/api/auth/user/password', authMiddleware, (req, res) => {
-  const { password } = req.body;
-  if (!password) return res.status(400).json({ message: 'Password harus diisi' });
-
-  const hashed = bcrypt.hashSync(password, 10);
-  db.query(
-    'UPDATE users SET password = ?, updated_at = ? WHERE id = ?',
-    [hashed, new Date(), req.userId],
-    (err) => {
-      if (err) {
-        return res.status(500).json({ message: 'Gagal update password', error: err });
-      }
-      res.json({ success: true, message: 'Password berhasil diperbarui' });
-    }
-  );
-});
-
-
-app.delete('/api/auth/user', authMiddleware, (req, res) => {
-  db.query('DELETE FROM users WHERE id = ?', [req.userId], (err, result) => {
-    if (err) {
-      return res.status(500).json({ message: 'Gagal menghapus user', error: err });
-    }
-    res.json({ success: true, message: 'User berhasil dihapus' });
-  });
-});
-
-
-app.post('/api/auth/logout', authMiddleware, (req, res) => {
-  // Di client tinggal hapus token
-  res.json({ message: 'Logged out (hapus token di client)' });
-});
-
-/*
-=========================================================================================
-Workbook
-=========================================================================================
-*/
-
-// CREATE workbook
-app.post('/api/workbook', authMiddleware, (req, res) => {
-  const { title, thumbnail } = req.body;
-  const now = new Date();
-  db.query(
-    'INSERT INTO workbooks (user_id, title, thumbnail, last_edited_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [req.userId, title, thumbnail || null, now, now, now],
-    (err, result) => {
-      if (err) return res.status(500).json({ message: 'Gagal menambahkan workbook' });
-      res.status(201).json({ success: true, message: 'Workbook ditambahkan', id: result.insertId });
-    }
-  );
-});
-
-// READ semua workbook user
-app.get('/api/workbook', authMiddleware, (req, res) => {
-  db.query('SELECT * FROM workbooks WHERE user_id = ?', [req.userId], (err, results) => {
-    if (err) return res.status(500).json({ message: 'Gagal mengambil workbook', error: err });
-    res.json(results);
-  });
-});
-
-// READ detail satu workbook
-app.get('/api/workbook/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  db.query('SELECT * FROM workbooks WHERE id = ? AND user_id = ?', [id, req.userId], (err, results) => {
-    if (err || results.length === 0) return res.status(404).json({ message: 'Workbook tidak ditemukan' });
+// Mendapatkan data user yang sedang login
+app.get('/auth/user', authMiddleware, (req, res) => {
+  db.query('SELECT id, username, email, tier, avatar FROM users WHERE id = ?', [req.userId], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data user', error: err });
+    if (results.length === 0) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
     res.json(results[0]);
   });
 });
 
-// UPDATE workbook
-app.put('/api/workbook/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  const userId = req.userId;
-  const now = new Date();
+// Update Profil User
+app.put('/auth/user/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { username, email, avatar } = req.body;
 
-  // Add 'is_favorite' to the allowedFields array
-  const allowedFields = ['title', 'thumbnail', 'is_archived', 'is_favorite']; 
-  const fieldsToUpdate = [];
-  const values = [];
-
-  for (const key of allowedFields) {
-    if (req.body.hasOwnProperty(key)) {
-      fieldsToUpdate.push(`${key} = ?`);
-      values.push(req.body[key]);
-    }
+  if (parseInt(id) !== req.userId) { // Pastikan user hanya bisa mengupdate profilnya sendiri
+    return res.status(403).json({ success: false, message: "Akses ditolak. Anda hanya bisa mengupdate profil Anda sendiri." });
   }
 
-  // Cek apakah ada field yang ingin diupdate
-  if (fieldsToUpdate.length === 0) {
-    return res.status(400).json({ success: false, message: 'Tidak ada field yang dikirim untuk diupdate' });
+  let updateFields = [];
+  let updateValues = [];
+
+  if (username) {
+    updateFields.push('username = ?');
+    updateValues.push(username);
+  }
+  if (email) {
+    updateFields.push('email = ?');
+    updateValues.push(email);
+  }
+  if (avatar) {
+    updateFields.push('avatar = ?');
+    updateValues.push(avatar);
   }
 
-  // Tambahkan kolom yang selalu diupdate
-  fieldsToUpdate.push('last_edited_at = ?', 'updated_at = ?');
-  values.push(now, now);
+  if (updateFields.length === 0) {
+    return res.status(400).json({ success: false, message: 'Tidak ada data untuk diupdate' });
+  }
 
-  // Tambahkan ID dan User untuk WHERE clause
-  values.push(id, userId);
+  const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+  updateValues.push(id);
 
-  const sql = `
-    UPDATE workbooks 
-    SET ${fieldsToUpdate.join(', ')}
-    WHERE id = ? AND user_id = ?`;
-
-  db.query(sql, values, (err, result) => {
+  db.query(query, updateValues, (err, result) => {
     if (err) {
-      return res.status(500).json({ success: false, message: 'Gagal update workbook', error: err });
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ success: false, message: 'Username atau email sudah terdaftar' });
+      }
+      return res.status(500).json({ success: false, message: 'Gagal update profil user', error: err });
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milikmu' });
-    }
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'User tidak ditemukan atau tidak ada perubahan' });
+    res.json({ success: true, message: 'Profil user berhasil diupdate' });
+  });
+});
+
+
+/*
+=========================================================================================
+Workbook Endpoints
+=========================================================================================
+*/
+
+// GET all workbooks for the logged-in user
+app.get('/workbook', authMiddleware, (req, res) => {
+  db.query('SELECT * FROM workbook WHERE user_id = ?', [req.userId], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil workbook', error: err });
+    res.json(results);
+  });
+});
+
+// GET a single workbook by ID for the logged-in user
+app.get('/workbook/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  db.query('SELECT * FROM workbook WHERE id = ? AND user_id = ?', [id, req.userId], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil workbook', error: err });
+    if (results.length === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan' });
+    res.json(results[0]);
+  });
+});
+
+// CREATE a new workbook
+app.post('/workbook', authMiddleware, (req, res) => {
+  const { title, description, thumbnail } = req.body;
+  if (!title) return res.status(400).json({ success: false, message: 'Judul workbook wajib diisi' });
+
+  const createdAt = new Date().toISOString().slice(0, 19).replace('T', ' '); // Format YYYY-MM-DD HH:MM:SS
+  const lastEditedAt = createdAt;
+
+  db.query('INSERT INTO workbook (user_id, title, description, thumbnail, created_at, last_edited_at, is_favorite, is_archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [req.userId, title, description, thumbnail, createdAt, lastEditedAt, 0, 0], // Default is_favorite and is_archived to 0
+    (err, result) => {
+      if (err) return res.status(500).json({ success: false, message: 'Gagal membuat workbook', error: err });
+      res.status(201).json({ success: true, message: 'Workbook berhasil dibuat', id: result.insertId });
+    });
+});
+
+// UPDATE a workbook by ID for the logged-in user
+app.put('/workbook/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { title, description, thumbnail, is_favorite, is_archived } = req.body;
+  const lastEditedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+  let updateFields = [];
+  let updateValues = [];
+
+  if (title !== undefined) {
+    updateFields.push('title = ?');
+    updateValues.push(title);
+  }
+  if (description !== undefined) {
+    updateFields.push('description = ?');
+    updateValues.push(description);
+  }
+  if (thumbnail !== undefined) {
+    updateFields.push('thumbnail = ?');
+    updateValues.push(thumbnail);
+  }
+  if (is_favorite !== undefined) {
+    updateFields.push('is_favorite = ?');
+    updateValues.push(is_favorite);
+  }
+  if (is_archived !== undefined) {
+    updateFields.push('is_archived = ?');
+    updateValues.push(is_archived);
+  }
+
+  updateFields.push('last_edited_at = ?');
+  updateValues.push(lastEditedAt);
+
+  if (updateFields.length === 0) {
+    return res.status(400).json({ success: false, message: 'Tidak ada data untuk diupdate' });
+  }
+
+  const query = `UPDATE workbook SET ${updateFields.join(', ')} WHERE id = ? AND user_id = ?`;
+  updateValues.push(id, req.userId);
+
+  db.query(query, updateValues, (err, result) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengupdate workbook', error: err });
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau tidak ada perubahan' });
     res.json({ success: true, message: 'Workbook berhasil diupdate' });
   });
 });
 
-
-
-// DELETE workbook
-app.delete('/api/workbook/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-
-  // 1. Ambil dulu data workbook (khususnya thumbnail-nya)
-  db.query('SELECT thumbnail FROM workbooks WHERE id = ? AND user_id = ?', [id, req.userId], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ message: 'Gagal mengambil data workbook', error: err });
-    }
-
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milikmu' });
-    }
-
-    const thumbnailUrl = rows[0].thumbnail;
-
-    // 2. Hapus file gambar jika ada
-    if (thumbnailUrl) {
-      // Hapus base URL untuk mendapat relative path
-      const localPath = thumbnailUrl.replace('http://127.0.0.1:3000/', '');
-      const fullPath = path.join(__dirname, localPath);
-
-      if (fs.existsSync(fullPath)) {
-        fs.unlink(fullPath, (err) => {
-          if (err) console.error("Gagal menghapus file:", err);
-          else console.log("File thumbnail dihapus:", fullPath);
-        });
-      }
-    }
-
-    // 3. Hapus data workbook dari database
-    db.query('DELETE FROM workbooks WHERE id = ? AND user_id = ?', [id, req.userId], (err2, result) => {
-      if (err2) {
-        return res.status(500).json({ message: 'Gagal menghapus workbook', error: err2 });
-      }
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau tidak milikmu' });
-      }
-      res.json({ success: true, message: 'Workbook dan thumbnail berhasil dihapus' });
-    });
-  });
-});
-
-
-/*
-=========================================================================================
-Task
-=========================================================================================
-*/
-app.post('/api/tasks', authMiddleware, (req, res) => {
-  const {
-    workbook_id,
-    title,
-    description,
-    due_date,
-    due_date_reminder,
-    reminder_time,
-    link_file,
-    tipe
-  } = req.body;
-
-  const user_id = req.userId;
-  const now = new Date();
-
-  const sql = `INSERT INTO tasks 
-    (user_id, workbook_id, title, description, due_date, due_date_reminder, reminder_time, link_file, tipe, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-  db.query(sql, [user_id, workbook_id, title, description, due_date, due_date_reminder, reminder_time, link_file, tipe, now, now], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal menambahkan task', error: err });
-    res.status(201).json({ success: true, message: 'Task berhasil ditambahkan', id: result.insertId });
-  });
-});
-
-app.get('/api/tasks', authMiddleware, (req, res) => {
-  db.query('SELECT * FROM tasks WHERE user_id = ?', [req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data tasks', error: err });
-    res.json(rows);
-  });
-});
-
-app.get('/api/tasks/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  db.query('SELECT * FROM tasks WHERE workbook_id = ? AND user_id = ?', [id, req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil task', error: err });
-    if (rows.length === 0) return res.status(200).json({ success: false, message: 'Task tidak ditemukan atau bukan milikmu' });
-    res.json(rows);
-  });
-});
-
-app.put('/api/tasks/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  const user_id = req.userId;
-
-  db.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [id, user_id], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data task', error: err });
-    if (rows.length === 0) return res.status(200).json({ success: false, message: 'Task tidak ditemukan atau bukan milikmu' });
-
-    const old = rows[0];
-
-    const data = {
-      title: req.body.title || old.title,
-      description: req.body.description || old.description,
-      due_date: req.body.due_date || old.due_date,
-      due_date_reminder: req.body.due_date_reminder || old.due_date_reminder,
-      reminder_time: req.body.reminder_time || old.reminder_time,
-      link_file: req.body.link_file || old.link_file,
-      updated_at: new Date()
-    };
-
-    const sql = `UPDATE tasks SET 
-      title = ?, description = ?, due_date = ?, 
-      due_date_reminder = ?, reminder_time = ?, link_file = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?`;
-
-    db.query(sql, [data.title, data.description, data.due_date, data.due_date_reminder, data.reminder_time, data.link_file, data.updated_at, id, user_id], (err, result) => {
-      if (err) return res.status(500).json({ success: false, message: 'Gagal update task', error: err });
-      if (result.affectedRows === 0) return res.status(200).json({ success: false, message: 'Task tidak ditemukan atau bukan milikmu' });
-      res.json({ success: true, message: 'Task berhasil diupdate' });
-    });
-  });
-});
-
-
-app.delete('/api/tasks/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-
-  db.query('DELETE FROM tasks WHERE id = ? AND user_id = ?', [id, req.userId], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus task', error: err });
-    if (result.affectedRows === 0) return res.status(200).json({ success: false, message: 'Task tidak ditemukan atau bukan milikmu' });
-    res.json({ success: true, message: 'Task berhasil dihapus' });
+// DELETE a workbook by ID for the logged-in user
+app.delete('/workbook/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  db.query('DELETE FROM workbook WHERE id = ? AND user_id = ?', [id, req.userId], (err, result) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus workbook', error: err });
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan' });
+    res.json({ success: true, message: 'Workbook berhasil dihapus' });
   });
 });
 
 /*
 =========================================================================================
-Calender
+Task Endpoints
 =========================================================================================
 */
-// CREATE calender_event
-app.post('/api/calender_events', authMiddleware, (req, res) => {
-  const {
-    workbook_id,
-    title,
-    description,
-    status,
-    created_by,
-    start_date,
-    end_date,
-    link,
-    file
-  } = req.body;
 
-  const user_id = req.userId;
-  const now = new Date();
+// GET all tasks for a specific workbook of the logged-in user
+app.get('/workbook/:workbookId/tasks', authMiddleware, (req, res) => {
+  const { workbookId } = req.params;
+  // Pastikan workbook tersebut milik user yang login
+  db.query('SELECT * FROM workbook WHERE id = ? AND user_id = ?', [workbookId, req.userId], (err, workbookResults) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal memeriksa workbook', error: err });
+    if (workbookResults.length === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milik Anda' });
 
-  // Cek dulu workbook_id ada dan milik user
-  db.query('SELECT id FROM workbooks WHERE id = ? AND user_id = ?', [workbook_id, user_id], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Error mengecek workbook', error: err });
-    if (rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milikmu' });
-    }
+    db.query('SELECT * FROM tasks WHERE workbook_id = ?', [workbookId], (err, results) => {
+      if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil tasks', error: err });
+      res.json(results);
+    });
+  });
+});
 
-    // Kalau valid, lanjut insert
-    const sql = `INSERT INTO calender_events
-      (user_id, workbook_id, title, description, status, created_by, start_date, end_date, link, file, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+// CREATE a new task in a specific workbook
+app.post('/workbook/:workbookId/tasks', authMiddleware, (req, res) => {
+  const { workbookId } = req.params;
+  const { name, description, due_date, reminder_date, reminder_time, status = 'To Do', link } = req.body;
+  if (!name) return res.status(400).json({ success: false, message: 'Nama tugas wajib diisi' });
 
-    db.query(sql,
-      [user_id, workbook_id, title, description, status, created_by, start_date, end_date, link, file, now, now],
+  // Pastikan workbook tersebut milik user yang login
+  db.query('SELECT id FROM workbook WHERE id = ? AND user_id = ?', [workbookId, req.userId], (err, workbookResults) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal memeriksa workbook', error: err });
+    if (workbookResults.length === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milik Anda' });
+
+    db.query('INSERT INTO tasks (workbook_id, name, description, due_date, reminder_date, reminder_time, status, link) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [workbookId, name, description, due_date, reminder_date, reminder_time, status, link],
       (err, result) => {
-        if (err) return res.status(500).json({ success: false, message: 'Gagal menambahkan event', error: err });
-        res.status(201).json({ success: true, message: 'Event berhasil ditambahkan', id: result.insertId });
-      }
-    );
+        if (err) return res.status(500).json({ success: false, message: 'Gagal membuat tugas', error: err });
+        res.status(201).json({ success: true, message: 'Tugas berhasil dibuat', id: result.insertId });
+      });
   });
 });
 
+// UPDATE a task in a specific workbook
+app.put('/workbook/:workbookId/tasks/:taskId', authMiddleware, (req, res) => {
+  const { workbookId, taskId } = req.params;
+  const { name, description, due_date, reminder_date, reminder_time, status, link } = req.body;
 
-// READ all calender_events milik user
-app.get('/api/calender_events', authMiddleware, (req, res) => {
-  db.query('SELECT * FROM calender_events WHERE user_id = ?', [req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data events', error: err });
-    res.json(rows);
-  });
-});
+  // Pastikan workbook tersebut milik user yang login
+  db.query('SELECT id FROM workbook WHERE id = ? AND user_id = ?', [workbookId, req.userId], (err, workbookResults) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal memeriksa workbook', error: err });
+    if (workbookResults.length === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milik Anda' });
 
-// READ detail calender_event by id
-app.get('/api/calender_events/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  db.query('SELECT * FROM calender_events WHERE id = ? AND user_id = ?', [id, req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil event', error: err });
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Event tidak ditemukan atau bukan milikmu' });
-    res.json(rows[0]);
-  });
-});
+    let updateFields = [];
+    let updateValues = [];
 
-// UPDATE calender_event
-app.put('/api/calender_events/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  const user_id = req.userId;
+    if (name !== undefined) {
+      updateFields.push('name = ?');
+      updateValues.push(name);
+    }
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+    if (due_date !== undefined) {
+      updateFields.push('due_date = ?');
+      updateValues.push(due_date);
+    }
+    if (reminder_date !== undefined) {
+      updateFields.push('reminder_date = ?');
+      updateValues.push(reminder_date);
+    }
+    if (reminder_time !== undefined) {
+      updateFields.push('reminder_time = ?');
+      updateValues.push(reminder_time);
+    }
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+    if (link !== undefined) {
+        updateFields.push('link = ?');
+        updateValues.push(link);
+    }
 
-  db.query('SELECT * FROM calender_events WHERE id = ? AND user_id = ?', [id, user_id], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Error mengambil data', error: err });
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Event tidak ditemukan atau bukan milikmu' });
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: 'Tidak ada data untuk diupdate' });
+    }
 
-    const old = rows[0];
+    const query = `UPDATE tasks SET ${updateFields.join(', ')} WHERE id = ? AND workbook_id = ?`;
+    updateValues.push(taskId, workbookId);
 
-    // Merge data baru dan lama
-    const data = {
-      workbook_id: req.body.workbook_id || old.workbook_id,
-      title: req.body.title || old.title,
-      description: req.body.description || old.description,
-      status: req.body.status || old.status,
-      created_by: req.body.created_by || old.created_by,
-      start_date: req.body.start_date || old.start_date,
-      end_date: req.body.end_date || old.end_date,
-      link: req.body.link || old.link,
-      file: req.body.file || old.file,
-      updated_at: new Date()
-    };
-
-      const sql = `UPDATE calender_events SET
-        workbook_id = ?, title = ?, description = ?, status = ?, created_by = ?,
-        start_date = ?, end_date = ?, link = ?, file = ?, updated_at = ?
-        WHERE id = ? AND user_id = ?`;
-
-      db.query(sql,
-        [data.workbook_id, data.title, data.description, data.status, data.created_by,
-         data.start_date, data.end_date, data.link, data.file, data.updated_at, id, user_id],
-        (err, result) => {
-          if (err) return res.status(500).json({ success: false, message: 'Gagal update event', error: err });
-          if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Event tidak ditemukan atau bukan milikmu' });
-          res.json({ success: true, message: 'Event berhasil diupdate' });
-        });
+    db.query(query, updateValues, (err, result) => {
+      if (err) return res.status(500).json({ success: false, message: 'Gagal mengupdate tugas', error: err });
+      if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan atau tidak ada perubahan' });
+      res.json({ success: true, message: 'Tugas berhasil diupdate' });
     });
+  });
 });
 
+// DELETE a task in a specific workbook
+app.delete('/workbook/:workbookId/tasks/:taskId', authMiddleware, (req, res) => {
+  const { workbookId, taskId } = req.params;
 
-// DELETE calender_event
-app.delete('/api/calender_events/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
+  // Pastikan workbook tersebut milik user yang login
+  db.query('SELECT id FROM workbook WHERE id = ? AND user_id = ?', [workbookId, req.userId], (err, workbookResults) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal memeriksa workbook', error: err });
+    if (workbookResults.length === 0) return res.status(404).json({ success: false, message: 'Workbook tidak ditemukan atau bukan milik Anda' });
 
-  db.query('DELETE FROM calender_events WHERE id = ? AND user_id = ?', [id, req.userId], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus event', error: err });
-    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Event tidak ditemukan atau bukan milikmu' });
-    res.json({ success: true, message: 'Event berhasil dihapus' });
+    db.query('DELETE FROM tasks WHERE id = ? AND workbook_id = ?', [taskId, workbookId], (err, result) => {
+      if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus tugas', error: err });
+      if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan' });
+      res.json({ success: true, message: 'Tugas berhasil dihapus' });
+    });
   });
 });
 
 /*
 =========================================================================================
-Notes
-=========================================================================================
-*/
-// CREATE note
-app.post('/api/notes', authMiddleware, (req, res) => {
-  const { workbook_id, title, content } = req.body;
-  const user_id = req.userId;
-  const now = new Date();
-
-  const sql = `INSERT INTO notes (user_id, workbook_id, title, content, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?)`;
-  db.query(sql, [user_id, workbook_id, title, content, now, now], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal menambahkan note', error: err });
-    res.status(201).json({ success: true, message: 'Note berhasil ditambahkan', id: result.insertId });
-  });
-});
-
-// READ all notes milik user
-app.get('/api/notes', authMiddleware, (req, res) => {
-  const workbookId = req.query.workbook_id;
-  db.query('SELECT * FROM notes WHERE user_id = ? AND workbook_id = ?', [req.userId , workbookId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data notes', error: err });
-    res.json(rows);
-  });
-});
-
-// READ detail note by id
-app.get('/api/notes/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  db.query('SELECT * FROM notes WHERE workbook_id = ? AND user_id = ?', [id, req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil note', error: err });
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Note tidak ditemukan atau bukan milikmu' });
-    res.json(rows[0]);
-  });
-});
-
-// UPDATE note
-app.put('/api/notes/:id/:workbookid', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  const workbook_id = req.params.workbookid
-  const user_id = req.userId;
-
-  db.query('SELECT * FROM notes WHERE id = ? AND user_id = ? AND workbook_id = ?', [id, user_id, workbook_id], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil data note', error: err });
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Note tidak ditemukan atau bukan milikmu' });
-
-    const old = rows[0];
-
-    const data = {
-      workbook_id: req.body.workbook_id || old.workbook_id,
-      title: req.body.title || old.title,
-      content: req.body.content || old.content,
-      updated_at: new Date()
-    };
-
-    const sql = `UPDATE notes SET workbook_id = ?, title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?`;
-
-    db.query(sql, [data.workbook_id, data.title, data.content, data.updated_at, id, user_id], (err, result) => {
-      if (err) return res.status(500).json({ success: false, message: 'Gagal update note', error: err });
-      if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Note tidak ditemukan atau bukan milikmu' });
-      res.json({ success: true, message: 'Note berhasil diupdate' });
-    });
-  });
-});
-
-
-// DELETE note
-app.delete('/api/notes/:id', authMiddleware, (req, res) => {
-  const id = req.params.id;
-  db.query('DELETE FROM notes WHERE id = ? AND user_id = ?', [id, req.userId], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus note', error: err });
-    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Note tidak ditemukan atau bukan milikmu' });
-    res.json({ success: true, message: 'Note berhasil dihapus' });
-  });
-});
-
-
-/*
-=========================================================================================
-Payment
+Payment Endpoints (Admin Only)
 =========================================================================================
 */
 
-// CREATE Payment
-app.post("/api/payments", authMiddleware, upload.single("image"), (req, res) => {
-  const { amount, payment_method } = req.body;
-  const image = req.file ? `PAYMENTS_${req.userId}/${req.file.filename}` : null;
-  const now = new Date();
-
-  const sql = `INSERT INTO payment 
-    (user_id, amount, payment_method, payment_date, image, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`;
-
-  db.query(sql,
-    [req.userId, amount, payment_method, now, image, now, now],
-    (err, result) => {
-      if (err) return res.status(500).json({ success: false, message: "Gagal menambahkan pembayaran", error: err });
-      res.status(201).json({ success: true, message: "Pembayaran ditambahkan", id: result.insertId });
-    });
-});
-
-
-// READ all payments (for current user)
-app.get("/api/payments", authMiddleware, (req, res) => {
-  db.query("SELECT * FROM payment WHERE user_id = ?", [req.userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: "Gagal mengambil data", error: err });
-    res.json({ success: true, data: rows });
-  });
-});
-// admin only
-app.get("/api/payments/all", authMiddleware, checkAdmin, (req, res) => {
-  const query = `
-    SELECT 
-      payment.*, 
-      users.name AS user_name, 
-      users.email AS user_email 
-    FROM 
-      payment 
-    JOIN 
-      users 
-    ON 
-      payment.user_id = users.id
-  `;
-
-  db.query(query, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Gagal mengambil data", error: err });
-    }
-    res.json({ success: true, data: rows });
+// GET all payments (Admin only)
+app.get('/api/payments', authMiddleware, checkAdmin, (req, res) => {
+  db.query('SELECT * FROM payment', (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil pembayaran', error: err });
+    res.json({ success: true, payments: results });
   });
 });
 
+// GET payment by ID (Admin only)
+app.get('/api/payments/:id', authMiddleware, checkAdmin, (req, res) => {
+  db.query('SELECT * FROM payment WHERE id = ?', [req.params.id], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengambil pembayaran', error: err });
+    if (results.length === 0) return res.status(404).json({ success: false, message: 'Pembayaran tidak ditemukan' });
+    res.json({ success: true, payment: results[0] });
+  });
+});
 
+// CREATE payment (Admin only)
+app.post('/api/payments', authMiddleware, checkAdmin, (req, res) => {
+  const { user_id, amount, status } = req.body;
+  const payment_date = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-// READ payment by ID (must be owned by user)
-app.get("/api/payments/:id", authMiddleware, (req, res) => {
-  const paymentId = req.params.id;
-
-  let query = `
-    SELECT 
-      payment.*, 
-      users.name, 
-      users.email 
-    FROM payment 
-    JOIN users ON payment.user_id = users.id 
-    WHERE payment.id = ?
-  `;
-
-  const params = [paymentId];
-
-  // Jika bukan admin, tambahkan filter user_id
-  if (req.userRole !== "admin") {
-    query += " AND payment.user_id = ?";
-    params.push(req.userId);
+  if (!user_id || !amount || !status) {
+    return res.status(400).json({ success: false, message: 'User ID, jumlah, dan status wajib diisi' });
   }
 
-  db.query(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Gagal mengambil data", error: err });
-    }
-
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Data tidak ditemukan atau bukan milikmu" });
-    }
-
-    res.json({ success: true, data: rows[0] });
+  db.query('INSERT INTO payment (user_id, amount, payment_date, status) VALUES (?, ?, ?, ?)', [user_id, amount, payment_date, status], (err, result) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal menambahkan pembayaran', error: err });
+    res.status(201).json({ success: true, message: 'Pembayaran berhasil ditambahkan', id: result.insertId });
   });
 });
 
+// UPDATE payment (Admin only)
+app.put('/api/payments/:id', authMiddleware, checkAdmin, (req, res) => {
+  const { id } = req.params;
+  const { user_id, amount, status } = req.body;
+  const updateFields = [];
+  const updateValues = [];
 
-
-// UPDATE payment
-app.put("/api/payments/:id", authMiddleware, (req, res) => {
-  const id = req.params.id;
-  const { status } = req.body;
-  const now = new Date();
-
-  if (!status) {
-    return res.status(400).json({ success: false, message: "Field 'status' wajib diisi" });
+  if (user_id !== undefined) {
+    updateFields.push('user_id = ?');
+    updateValues.push(user_id);
+  }
+  if (amount !== undefined) {
+    updateFields.push('amount = ?');
+    updateValues.push(amount);
+  }
+  if (status !== undefined) {
+    updateFields.push('status = ?');
+    updateValues.push(status);
   }
 
-  // Ambil data payment dulu untuk cek user_id-nya
-  const getPaymentQuery = `SELECT * FROM payment WHERE id = ?`;
-  db.query(getPaymentQuery, [id], (err, results) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Gagal mengambil data pembayaran", error: err });
-    }
-    if (results.length === 0) {
-      return res.status(404).json({ success: false, message: "Pembayaran tidak ditemukan" });
-    }
+  if (updateFields.length === 0) {
+    return res.status(400).json({ success: false, message: 'Tidak ada data untuk diupdate' });
+  }
 
-    const payment = results[0];
+  const query = `UPDATE payment SET ${updateFields.join(', ')} WHERE id = ?`;
+  updateValues.push(id);
 
-    // Cek apakah pemilik data atau admin
-    const isOwner = payment.user_id === req.userId;
-    const isAdmin = req.userRole === "admin";
-
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ success: false, message: "Tidak memiliki akses untuk mengubah data ini" });
-    }
-
-    // Update pembayaran
-    const updateQuery = `UPDATE payment SET status = ?, updated_at = ? WHERE id = ?`;
-    db.query(updateQuery, [status, now, id], (err2, result) => {
-      if (err2) {
-        return res.status(500).json({ success: false, message: "Gagal update pembayaran", error: err2 });
-      }
-
-      if (status === "confirmed") {
-        // Setelah dikonfirmasi, ubah tier user (pemilik pembayaran) jadi premium
-        db.query("UPDATE users SET tier = 'premium', updated_at = ? WHERE id = ?", [now, payment.user_id], (err3) => {
-          if (err3) {
-            return res.status(500).json({
-              success: true,
-              message: "Pembayaran diupdate, tapi gagal update tier user",
-              error: err3,
-            });
-          }
-          return res.json({
-            success: true,
-            message: "Pembayaran berhasil diupdate & tier user diubah ke premium",
-          });
-        });
-      } else {
-        res.json({ success: true, message: "Pembayaran berhasil diupdate" });
-      }
-    });
+  db.query(query, updateValues, (err, result) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal mengupdate pembayaran', error: err });
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Pembayaran tidak ditemukan' });
+    res.json({ success: true, message: 'Pembayaran berhasil diupdate' });
   });
 });
 
+// DELETE payment (Admin only)
+app.delete('/api/payments/:id', authMiddleware, checkAdmin, (req, res) => {
+  db.query('DELETE FROM payment WHERE id = ?', [req.params.id], (err, result) => {
+    if (err) return res.status(500).json({ success: false, message: 'Gagal menghapus pembayaran', error: err });
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Pembayaran tidak ditemukan' });
+    res.json({ success: true, message: 'Pembayaran berhasil dihapus' });
+  });
+});
 
 
 /*
@@ -800,6 +455,22 @@ app.put("/api/payments/:id", authMiddleware, (req, res) => {
 Upload Image
 =========================================================================================
 */
+
+// Konfigurasi Multer untuk upload gambar
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const nameFolder = req.query.nameFolder ?? 'other'; // Nama folder dari query param, default 'other'
+    const username = req.userId ?? 'unknown'; // Dapatkan username dari token yang sudah di-decode
+    const uploadPath = path.join(__dirname, 'uploads', `${nameFolder}_${username}`);
+    fs.mkdirSync(uploadPath, { recursive: true }); // Buat folder jika belum ada
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Nama file unik
+  },
+});
+
+const upload = multer({ storage: storage });
 
 // API untuk upload gambar
 app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
@@ -817,19 +488,13 @@ app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
   });
 });
 
+/*
+=========================================================================================
+Server Listener
+=========================================================================================
+*/
 
-
-// DELETE payment
-// app.delete("/api/payments/:id", authMiddleware, (req, res) => {
-//   db.query("DELETE FROM payment WHERE id = ? AND user_id = ?", [req.params.id, req.userId], (err, result) => {
-//     if (err) return res.status(500).json({ success: false, message: "Gagal menghapus pembayaran", error: err });
-//     if (result.affectedRows === 0) return res.status(404).json({ success: false, message: "Data tidak ditemukan atau bukan milikmu" });
-//     res.json({ success: true, message: "Pembayaran berhasil dihapus" });
-//   });
-// });
-
-
-
-app.listen(3000, () => {
-  console.log('API running on http://localhost:3000');
+const PORT = process.env.PORT || 3001; // Gunakan port dari environment variable atau 3001
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });

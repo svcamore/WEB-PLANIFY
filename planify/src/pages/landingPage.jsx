@@ -462,7 +462,7 @@ const App = () => {
       <header>
         <a className="logo" href="#">
           <img
-            src="/logo%20planify%20new.png"
+            src="/logoplanifynew.png"
             alt="Planify Logo"
             width="36"
             height="36"
@@ -836,7 +836,7 @@ const App = () => {
           >
             <div className="icon-container" aria-hidden="true">
               <img
-                src="/logo%20planify%20new.png"
+                src="/logoplanifynew.png"
                 alt="Planify Logo"
                 width="36"
                 height="36"

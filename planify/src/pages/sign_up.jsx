@@ -64,7 +64,7 @@ const CreateAccount = () => {
         <div className="col-lg-5 p-5">
           <div className="card shadow-lg rounded-4 p-4">
             <div className="d-flex align-items-center justify-content-center gap-1 mb-2">
-              <img src="logo planify new.png" width="50" alt="Planify Logo" />
+              <img src="logoplanifynew.png" width="50" alt="Planify Logo" />
               <h5 className="fw-bold mb-0">Planify</h5>
             </div>
             <div className="text-center mb-4">

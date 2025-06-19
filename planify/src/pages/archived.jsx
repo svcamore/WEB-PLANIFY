@@ -137,7 +137,7 @@ const fetchUser = async () => {
               className="logo d-flex align-items-center"
             >
               <img
-                src="/logo%20planify%20new.png"
+                src="/logoplanifynew.png"
                 alt="Planify Logo"
                 width="36"
                 height="36"
