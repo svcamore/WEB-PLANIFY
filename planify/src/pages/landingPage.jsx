@@ -500,11 +500,11 @@ const App = () => {
         <section className="features-container">
           <article className="feature-card">
             <i className="fab fa-telegram feature-icon"></i>
-            <h3 className="feature-title">Share Workbook</h3>
+            <h3 className="feature-title">More Woorkbook</h3>
             <ul className="feature-list">
-              <li>Real Time Collaboration</li>
-              <li>Multi-user Access</li>
-              <li>Automatic Synchronization</li>
+              <li>Create Unlimited Workbooks</li>
+              <li>Sort by Favorite or Last Opened</li>
+              <li>Easy Access and Management for Each Workbook</li>
             </ul>
           </article>
           <article className="feature-card">
